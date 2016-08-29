@@ -315,7 +315,7 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
         return;
 
     // Формирование списка параметров
-    MSXMLWorks msxml;
+    MsxmlWorks msxml;
 
    	// Формируем список параметров
 	AnsiString xmlParams;
@@ -572,7 +572,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 
     try {
         String attribute;
-        MSXMLWorks msxml;
+        MsxmlWorks msxml;
         msxml.LoadXMLText(ParseStr);
 
         if (msxml.GetParseError() != "")
