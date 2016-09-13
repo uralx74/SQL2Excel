@@ -167,7 +167,8 @@ Variant __fastcall MSExcelWorks::GetRangeByName(Variant& Worksheet, AnsiString& 
         Variant range = Worksheet.OlePropertyGet("Range", RangeName);       // Опасный поиск диапазона по имени
         return range;
     } catch (EOleSysError &e) {
-        throw Exception("Не удалось определить Range по имени " + RangeName);
+        return Variant();
+        //throw Exception("Не удалось определить Range по имени " + RangeName);
     }
 
 /*    Variant Workbook = Worksheet.OlePropertyGet("Parent");
@@ -984,35 +985,16 @@ void MSExcelWorks::ExportToExcelFields(TOraQuery* QTable, Variant Worksheet)
         for (std::vector<AnsiString>::iterator itExcelField = vExcelFields.begin(); itExcelField < vExcelFields.end(); itExcelField++) {
             TField* pField = QTable->Fields->FindField(*itExcelField);
             if (pField) {
-                Variant range = msexcel.GetRangeByName(Worksheet, *itExcelField);
-                msexcel.WriteToRange(QTable->FieldByName(*itExcelField)->AsString, range);
-            }
-        }
-
-
-       /*
-        // Закоментированно 2016-03-31
-
-        Variant Workbook = Worksheet.OlePropertyGet("Parent");
-        Variant Names = Workbook.OlePropertyGet("Names"); // Получаем имена полей из дипазона range_body
-        int NamesCount = Names.OlePropertyGet("Count");
-
-        // Цикл по элементам range_body с вложенным циклом по Names
-        // Заполняем вектор именами полей (= именам ячеек в range_body)
-        for (int i = 1; i <= NamesCount; i++) {
-            Variant Name = Names.OleFunction("Item", i);
-            String sFieldName = UpperCase(Name.OlePropertyGet("Name"));
-
-            for(int j = 1; j <= FieldCount; j++) {
-                TField* field = QTable->Fields->FieldByNumber(j);
-                if (sFieldName == field->DisplayName) {         // Если адреса ячеек совпадают
-                    Variant range = msexcel.GetRangeByName(Worksheet, sFieldName);
-                    msexcel.WriteToRange(QTable->FieldByName(sFieldName)->AsString, range);
-                    break;
+                try {
+                    Variant range = msexcel.GetRangeByName(Worksheet, *itExcelField);
+                    if ( !VarIsEmpty(range) ) {
+                        msexcel.WriteToRange(QTable->FieldByName(*itExcelField)->AsString, range);
+                    }
+                } catch (...) {
                 }
             }
-        }*/
-    } catch(...){
+        }
+    } catch(...) {
     }
 }
 

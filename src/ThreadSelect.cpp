@@ -223,39 +223,17 @@ void __fastcall ThreadSelect::Execute()
         }
     }
 
- /*   while (OraQuery->Executing()) {
-        //Sleep(1000);
-        Application->ProcessMessages();
-        if (this->Terminated) {
-            WParamResultMessage = WM_THREAD_USER_CANCEL;
-            OraQuery->BreakExec();
-            break;
-        }
-        //OraQuery->Last();
-        //RecCount = OraQuery->RecordCount;
-
-    } */
-
     if (!this->Terminated) {
         // »звлечение данных из запроса
         ThreadStatus = WM_THREAD_PROCEED_BEGIN_FETCH;
         Synchronize(SyncThreadChangeStatus);
     }
 
-    // !!!!!!!!!!!!!!!!!!!!!!!! Ётот блок наверно можно убрать
-    /*if (!this->Terminated && OraQueryMain == NULL) {
-//------------------------------------------------------------------------------------------------------------------------------
-        ThreadStatus = WM_THREAD_ERROR_PARAMS_INCORRECT;
-        this->Terminate();
-    }*/
-
-
     if (!this->Terminated) {
         int RecCount = 0;
 
         OraQueryMain->FetchAll = true;
 
-        //OraQuery->Last();
 	    RecCount = OraQueryMain->RecordCount;
 
         if (RecCount <= 0) // ≈сли запрос не вернул записей

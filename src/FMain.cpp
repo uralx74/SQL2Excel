@@ -22,24 +22,27 @@ using namespace std;
 TForm1 *Form1;
 const String TASKNAME = "SQL2EXCEL";
 
+const String mainSpr = "spr_task_sql2excel";
+const String envSpr = "spr_task_sql2excel_env";
+
 //---------------------------------------------------------------------------
 //
 __fastcall TForm1::TForm1(TComponent* Owner)
 	: TForm(Owner)
 {
     // Список цветов вкладок
-    m_vTabColor.push_back(RGB(180,255,20));     // green
-    m_vTabColor.push_back(RGB(120,230,90));     // green
-    m_vTabColor.push_back(RGB(0,190,90));       // green
-    m_vTabColor.push_back(RGB(0,190,210));      // blue
-    m_vTabColor.push_back(RGB(90,225,255));     // blue
-    m_vTabColor.push_back(RGB(100,176,255));    // blue
-    m_vTabColor.push_back(RGB(200,145,255));    // violet
-    m_vTabColor.push_back(RGB(255,100,220));    // violet
-    m_vTabColor.push_back(RGB(255,130,170));    // red light
-    m_vTabColor.push_back(RGB(255,100,0));      // red
-    m_vTabColor.push_back(RGB(255,180,50));     // orange
-    m_vTabColor.push_back(RGB(255,255,0));      // yellow
+    m_vTabColor.push_back(static_cast<TColor>(RGB(180,255,20)));     // green
+    m_vTabColor.push_back(static_cast<TColor>(RGB(120,230,90)));     // green
+    m_vTabColor.push_back(static_cast<TColor>(RGB(0,190,90)));       // green
+    m_vTabColor.push_back(static_cast<TColor>(RGB(0,190,210)));      // blue
+    m_vTabColor.push_back(static_cast<TColor>(RGB(90,225,255)));     // blue
+    m_vTabColor.push_back(static_cast<TColor>(RGB(100,176,255)));    // blue
+    m_vTabColor.push_back(static_cast<TColor>(RGB(200,145,255)));    // violet
+    m_vTabColor.push_back(static_cast<TColor>(RGB(255,100,220)));    // violet
+    m_vTabColor.push_back(static_cast<TColor>(RGB(255,130,170)));    // red light
+    m_vTabColor.push_back(static_cast<TColor>(RGB(255,100,0)));      // red
+    m_vTabColor.push_back(static_cast<TColor>(RGB(255,180,50)));     // orange
+    m_vTabColor.push_back(static_cast<TColor>(RGB(255,255,0)));      // yellow
 
 
     // Список функций
@@ -147,6 +150,7 @@ bool __fastcall TForm1::Auth()
 
     if (loggedon) {
         Username =  UpperCase(Trim(OraSessionAuth->Username));
+        AddSystemVariable("username", Trim(OraSessionAuth->Username));
         OraSessionAuth->Disconnect();
         delete OraSessionAuth;
         return true;
@@ -155,6 +159,26 @@ bool __fastcall TForm1::Auth()
     }
 }
 
+/* Добавляет переменную среды
+ */
+void __fastcall TForm1::AddEnvVariable(const String& name, const String& value)
+{
+    //envVariables.find(name)
+
+    //if (!envVariables.constains(name))
+    {
+        envVariables["_" + name] = value;
+    }
+}
+
+/* Добавляет переменную среды
+ */
+void __fastcall TForm1::AddSystemVariable(const String& name, const String& value)
+{
+    {
+        envVariables["$"+name] = value;
+    }
+}
 //---------------------------------------------------------------------------
 // Загружает вектор
 int __fastcall TForm1::LoadQueryList()
@@ -307,8 +331,10 @@ String TForm1::GetValueFromSQL(String SQLText, String dbindex)
     return result;
 }
 
-//---------------------------------------------------------------------------
-// Разбор xml-текста параметров
+/* Разбирает xml-текст из поля userparams
+   Формирует обьект типа TParamRecord
+   Добавляет объект в ListParams переданного в параметрах TQueryItem* queryitem
+ */
 void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
 {
     if (ParamStr == "")
@@ -358,14 +384,26 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
         // Тест!!!!!!!
         param.parent = msxml.GetAttributeValue(node, "parent");
         param.value_src = msxml.GetAttributeValue(node, "value");
-        param.value_src = ReplaceVariables(&m_env_var, param.value_src);
-        param.value = ReplaceVariables(&queryitem->Variables, param.value_src);
+
+
+        //param.value_src = ReplaceVariables(&m_env_var, param.value_src);
+        param.value_src = ReplaceVariables(envVariables, param.value_src);
+
+
+        param.value = ReplaceVariables(queryitem->Variables, param.value_src);
         param.value = GetDefinedValue(param.value);     // Доработать здесь!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
         // visibleif
         if (param.visible == "" && param.visibleif != "") {  // visible имеет приоритет над visibleif
-            String condition = ReplaceVariables(&m_env_var, param.visibleif);  // Подстановка предопределенных значений в среде
-            condition = ReplaceVariables(&queryitem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
+
+            //String condition = ReplaceVariables(&m_env_var, param.visibleif);  // Подстановка предопределенных значений в среде
+
+
+
+            String condition = ReplaceVariables(envVariables, param.visibleif);  // Подстановка предопределенных значений в среде
+
+
+            condition = ReplaceVariables(queryitem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
 
             if (GetDefinedValue(condition) == "true")
                 param.visibleflg = true;
@@ -388,17 +426,14 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
             param.deleteifflg = false;
         }
 
-        if (param.type == "variable" )
+        if (param.type == "variable" )  // Неотображаемое поле. Значение берется из запроса.
+                                        // Не рекомендуется использовать, так как указанный запрос
+                                        // будет выполняться при каждом запуске программы.
         {
             param.visibleflg = false;
-            if (param.name.Length()>0)
-                queryitem->Variables.push_back(ENVITEM("_" + param.name, param.value));
-            //queryitem->Variables.push_back(ENVITEM(param.name, param.value));
-
-            //node = msxml.GetNextNode(node);
-            //continue;
-            //param.display = param.value;
-            //param.value = GetValueFromSQL(param.value_src, param.dbindex);
+            if (param.name.Length()>0) {
+                queryitem->Variables["_" + param.name] = param.value;
+            }
         }
         else if (param.type == "string" )
         {
@@ -501,9 +536,8 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
                     item.visibleif = Trim(LowerCase(msxml.GetAttributeValue(subnode, "visibleif")));
 
                     if (item.visible == "" && item.visibleif != "") {  // visible имеет приоритет над visibleif
-                        String condition = ReplaceVariables(&m_env_var, item.visibleif);  // Подстановка предопределенных значений в среде
-                        condition = ReplaceVariables(&queryitem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
-
+                        String condition = ReplaceVariables(envVariables, item.visibleif);  // Подстановка предопределенных значений в среде
+                        condition = ReplaceVariables(queryitem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
 
                         if (GetDefinedValue(condition) == "true")
                             item.visibleflg = true;
@@ -512,8 +546,6 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
 
 
                         //item.visibleflg = CheckCondition(condition);
-
-
                         //item.visibleflg = CheckCondition(item.visibleif);
                         //if (record->visibleif != "" && CheckCondition(record->visibleif) != true) {
                         //AnsiString s = "s";
@@ -914,7 +946,7 @@ void __fastcall TForm1::FormClose(TObject *Sender, TCloseAction &Action)
 
 //---------------------------------------------------------------------------
 //
-String TForm1::GetSQL(String SQLText)
+String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 {
     DinamicControlExit(NULL);
     //ShowMessage(Parameters[SelIndex][0].value.c_str());		// Удаляем побелы
@@ -926,30 +958,28 @@ String TForm1::GetSQL(String SQLText)
     // Обрабатываем строку вручную
 
     TParamRecord *params;
+    //QueryVariables &queryParams = *params;
 
     int nDangerWords = DangerWords.size();
 
     // Защита от Иньекций  (обработка параметров)
-    for (unsigned int j = 0; j < CurrentQueryItem->UserParams.size(); j ++) {   // Убираем из парамтров все лишнее
-        /*int found = Parameters[SelIndex][j].value.find("--") +
-        Parameters[SelIndex][j].value.find("/*") +
-        Parameters[SelIndex][j].value.find("select ")+
-        Parameters[SelIndex][j].value.find("'")+
-        Parameters[SelIndex][j].value.find(";");
-        if (found > -5) {
-            Parameters[SelIndex][j].value = "";
-            break;
-        }*/
-        for (int i = 0; i < nDangerWords; i++)
-        {
-            //int k = Parameters[SelIndex][j].value.Pos(DangerWords[i]);
-            //AnsiString s = CurrentQueryItem->Parameters[j].value;
-            if (CurrentQueryItem->UserParams[j].value.Pos(DangerWords[i]) != 0) {
-                CurrentQueryItem->UserParams[j].value = "";
-                break;
+    // перенести в отдельную функцию!!!
+
+
+    if ( queryParams != NULL ) {
+        for (unsigned int j = 0; j < (*queryParams).size(); j ++) {   // Убираем из парамтров все лишнее
+            for (int i = 0; i < nDangerWords; i++)
+            {
+                //int k = Parameters[SelIndex][j].value.Pos(DangerWords[i]);
+                //AnsiString s = CurrentQueryItem->Parameters[j].value;
+                if ( (*queryParams)[j].value.Pos(DangerWords[i]) != 0) {
+                    (*queryParams)[j].value = "";
+                    break;
+                }
             }
         }
     }
+
 
     // Готовим запрос (заменяем параметры на значения)
 	std::vector<EXPLODESTRING> sqlstring;
@@ -964,25 +994,45 @@ String TForm1::GetSQL(String SQLText)
             item->text = StringReplace(item->text, "/**", "", replaceflags);
  			item->text = StringReplace(item->text, "**/", "", replaceflags);     // Удаляем **/
 
-            //item->text = item->text.LowerCase();  // 2016-07-06
-
-            //bool bParamFined = false;
-            for (unsigned int j = 0; j < CurrentQueryItem->UserParams.size(); j++) {   //Заменяем --Параметр на Значение
-                TParamRecord *param;
-                param = &CurrentQueryItem->UserParams[j];
-
-                param->name = param->name.Trim();		// Удаляем побелы
-                param->value = param->value.Trim();		// Удаляем побелы
-                if (param->name != "" && item->text.Pos(":"+param->name)>0) {
-                    //bParamFined = true;
-                    if (param->deleteifflg == true && param->value.UpperCase() == param->deleteifvalue.UpperCase())
-                        item->text = "";
-                    else
- 			            item->text = StringReplace(item->text, ":"+param->name, param->value, replaceflags);     // Удаляем **/
-                }
-                /*else
-                    item->text = "";   */
+            // Подстановка переменных среды
+            for (EnvVariables::const_iterator it = envVariables.begin(); it != envVariables.end(); it ++)
+            {
+                item->text = StringReplace(item->text, it->first, it->second, replaceflags);
             }
+
+            // Подстановка переменных - параметров
+            //item->text = item->text.LowerCase();  // 2016-07-06
+            //bool bParamFined = false;
+
+
+
+            // Если заданы параметры пользователя
+            if ( queryParams != NULL ) {
+                for (QueryVariables::size_type j = 0; j < (*queryParams).size(); j++) {   //Заменяем --Параметр на Значение
+                    TParamRecord *param;
+                    param = &(*queryParams)[j];
+
+                    param->name = param->name.Trim();		// Удаляем пробелы
+                    param->value = param->value.Trim();		// Удаляем пробелы
+                    if (param->name != "" && item->text.Pos(":"+param->name) > 0)
+                    {
+                        //bParamFined = true;
+                        if (param->deleteifflg == true && param->value.UpperCase() == param->deleteifvalue.UpperCase())
+                        {
+                            item->text = "";
+                        }
+                        else
+                        {
+ 			                item->text = StringReplace(item->text, ":"+param->name, param->value, replaceflags);     // Удаляем **/
+                        }
+                    }
+                    //else  item->text = "";  
+                }
+            }
+
+
+
+
               /*if (!bParamFined)   // Удаляем строку с параметром, если отсутствуют подходящие параметры в списке
                 item->text = "" + item->text + " ERROR! ONE OF THESE PARAMETERS NOT FOUND!";   */
         }
@@ -1165,15 +1215,18 @@ AnsiString TForm1::GetDefinedValue(AnsiString value)
 // заданных значением EsaleSession.
 void TForm1::InitEnvVariables()
 {
-    m_env_var.reserve(4);
+    //m_env_var.reserve(4);
 
     // Филиал
-    AnsiString filial;      // Филиал  (id_rn)
-    AnsiString maingroup;   // Участок
-    if (Username.UpperCase() == "ADMIN") {
+    //AnsiString filial;      // Филиал  (id_rn)
+    //AnsiString maingroup;   // Участок
+
+/*    if (Username.UpperCase() == "ADMIN") {
         filial = "01";
         maingroup = "01";
-    } else if (Username.Length() == 7) {
+    } else if (Username.Length() == 7) { */
+
+    {
         // Определение кода филиала
         // и кода участка
         // Здесь желательно переделать полностью
@@ -1181,7 +1234,46 @@ void TForm1::InitEnvVariables()
         TOraQuery *OraQuery = new TOraQuery(NULL);
         OraQuery->Session = EsaleSession;
         //OraQuery->SQL->Add("select * from raion where substr(:username,3,2) = substr(uuser,3,2)");
-        OraQuery->SQL->Add("select  trim(to_char(nvl2(uch, '01', id),'00')) id, trim(to_char(nvl(uch, '01'),'00')) uch from raion"
+
+        TOraQuery *EnvVarQueries = new TOraQuery(NULL);
+
+
+
+        OraQuery->SQL->Add("select * from " + envSpr);
+        OraQuery->Open();
+        while(!OraQuery->Eof)
+        {
+            EnvVarQueries->Session = m_sessions[OraQuery->FieldByName("dbname")->AsInteger];
+            EnvVarQueries->SQL->Clear();
+
+            String sqlText = GetSQL(OraQuery->FieldByName("sqltext1")->AsString);
+            EnvVarQueries->SQL->Add(sqlText);
+            EnvVarQueries->Open();
+
+            // Пополняем список перменных среды - по столбцам
+            for (int i = 1; i <= EnvVarQueries->FieldCount; i++)
+            {
+                AddEnvVariable(EnvVarQueries->Fields->FieldByNumber(i)->DisplayName,
+                    EnvVarQueries->Fields->FieldByNumber(i)->AsString);
+            }
+            // Пополняем список перменных среды - по строкам
+            //while (!EnvVarQueries->Eof) {
+            //    AddEnvVariable(EnvVarQueries->FieldByName("name")->AsString,
+            //        EnvVarQueries->FieldByName("value")->AsString);
+            //    EnvVarQueries->Next();
+            //}
+
+            OraQuery->Next();
+        }
+        delete EnvVarQueries;
+        EnvVarQueries = NULL;
+
+        OraQuery->SQL->Clear();
+        delete OraQuery;
+        OraQuery = NULL;
+
+
+        /*OraQuery->SQL->Add("select  trim(to_char(nvl2(uch, '01', id),'00')) id, trim(to_char(nvl(uch, '01'),'00')) uch from raion"
             " left join nasel_uch on nasel_uch.id_rn = raion.id where substr(:username,3,2) = substr(uuser,3,2)"
             //" and substr(:username,2,2) <> '10'"
             " order by nasel_uch.porydok");
@@ -1198,7 +1290,7 @@ void TForm1::InitEnvVariables()
             maingroup = OraQuery->FieldByName("uch")->AsString;
         }
         OraQuery->Close();
-        delete OraQuery;
+        delete OraQuery;  */
 
         //filial = Username.SubString(3, 2);
     }
@@ -1219,10 +1311,13 @@ void TForm1::InitEnvVariables()
     OraQuery->Close();
     delete OraQuery;
 
-    m_env_var.push_back(ENVITEM("_filial",filial));
+    AddEnvVariable("roles", roles.LowerCase());
+
+
+    /*m_env_var.push_back(ENVITEM("_filial",filial));
     m_env_var.push_back(ENVITEM("_maingroup",maingroup));
     m_env_var.push_back(ENVITEM("_username", Username.LowerCase()));
-    m_env_var.push_back(ENVITEM("_roles", roles.LowerCase()));
+    m_env_var.push_back(ENVITEM("_roles", roles.LowerCase()));*/
 }
 
 //---------------------------------------------------------------------------
@@ -1414,20 +1509,13 @@ void __fastcall TForm1::OnThreadSuccess(EXPORTMODE ExportMode, std::vector<Strin
 void __fastcall TForm1::ListBox1DrawItem(TWinControl *Control, int Index,
       TRect &Rect, TOwnerDrawState State)
 {
-    TColor colorText1;  // Цвет текста первой строки
-    TColor colorText1Sel;  // Цвет текста первой строки
-    TColor colorText2;  // Цвет текста второй строки
-    TColor colorText2Sel;  // Цвет текста второй строки
-    TColor colorBkOdd;  // Цвет фона Нечетного элемента
-    TColor colorBkEven; // Цвет фона Четного элемента
-
     // Определение цвета
-    colorText1 = RGB(0,0,0);
-    colorText1Sel = RGB(255,255,255);
-    colorText2 = RGB(80,80,80);
-    colorText2Sel = RGB(255,255,255);
-    colorBkOdd = RGB(240,240,240);
-    colorBkEven = RGB(255,255,255);
+    static const TColor colorText1 = static_cast<TColor>(RGB(0,0,0));   // Цвет текста первой строки
+    static const TColor colorText1Sel = static_cast<TColor>(RGB(255,255,255));  // Цвет текста первой строки
+    static const TColor colorText2 = static_cast<TColor>(RGB(80,80,80));        // Цвет текста второй строки
+    static const TColor colorText2Sel = static_cast<TColor>(RGB(255,255,255));  // Цвет текста второй строки
+    static const TColor colorBkOdd = static_cast<TColor>(RGB(240,240,240));     // Цвет фона Нечетного элемента
+    static const TColor colorBkEven = static_cast<TColor>(RGB(255,255,255));    // Цвет фона Четного элемента
 
     TListBox *pListBox = static_cast <TListBox *> (Control);
     TCanvas *pCanvas = pListBox->Canvas;
@@ -1622,6 +1710,7 @@ bool TForm1::CheckCondition(AnsiString condition)
 //    return lparam == rparam;
 }
 
+/*
 //---------------------------------------------------------------------------
 // Подстановка переменных, определенных в m_env_var (глобальных)
 String TForm1::ReplaceEnvVariables(AnsiString condition)
@@ -1629,25 +1718,38 @@ String TForm1::ReplaceEnvVariables(AnsiString condition)
     TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
 
     for (std::vector<ENVITEM>::iterator it = m_env_var.begin() ; it != m_env_var.end(); ++it) {
-        condition = StringReplace(condition, it->name, it->value, replaceflags);     // Удаляем **/
+        condition = StringReplace(condition, it->name, it->value, replaceflags);     // Удаляем * * /
     }
 
     return condition;
-}
+} */
 
 //---------------------------------------------------------------------------
 // Подстановка переменных, определенных в QUERYITEM (локальных)
 //AnsiString TForm1::ReplaceQueryVariables(std::vector<TParamRecord>* ListParams)
-String TForm1::ReplaceVariables(std::vector<ENVITEM>* Variables, const String& Text)
+//String TForm1::ReplaceVariables(std::vector<ENVITEM>* Variables, const String& Text)
+String TForm1::ReplaceVariables(EnvVariables &variables, const String& Text)
 {
-    if (Variables->size() < 1 || Text.Length() < 1)
+    if (variables.size() < 1 || Text.Length() < 1)
+    {
         return Text;
-        
-    TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
-    String Result = Text;
-    for (std::vector<ENVITEM>::iterator it = (*Variables).begin() ; it != (*Variables).end(); ++it) {
-        Result = StringReplace(Result, it->name, it->value, replaceflags);
     }
+        
+    static const TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
+    String Result = Text;
+
+
+    for (EnvVariables::const_iterator it = variables.begin(); it != variables.end(); it ++)
+    {
+        Result = StringReplace(Result, it->first, it->second, replaceflags);
+    }
+
+
+    /*for (std::vector<ENVITEM>::iterator it = (*Variables).begin() ; it != (*Variables).end(); ++it) {
+        Result = StringReplace(Result, it->name, it->value, replaceflags);
+    }*/
+
+
     return Result;
 }
 
@@ -1665,7 +1767,7 @@ void __fastcall TForm1::PageControl1DrawTab(TCustomTabControl *Control,
 
     // ОПРЕДЕЛЯЕМ ЦВЕТА
     TColor colorBk;     // Цвет фона
-    TColor colorText = colorText = RGB(0,0,0);     // Цвет текста
+    TColor colorText = static_cast<TColor>(RGB(0,0,0));     // Цвет текста
 
     // Цикл из 8 цветов (в т.ч. светло серый)
     //int m_ColorIndex = TabIndex % m_vTabColor.size();  // Повторять цвета по кругу
@@ -1731,7 +1833,7 @@ void TForm1::FillFieldsLB()
     TTabItem* TabItem = &TabList[TabControl1->TabIndex];
     ListBox1->Items->BeginUpdate();
     ListBox1->Clear();
-    for (int i = 0; i < TabItem->queryitem.size(); i++) {
+    for (QueryItemList::size_type i = 0; i < TabItem->queryitem.size(); i++) {
         AnsiString sName = TabItem->queryitem[i]->queryname;   // QueryName
         AnsiString sFields = TabItem->queryitem[i]->fieldslist; // Fields
         ListBox1->Items->Add(sName + "\\n" + sFields);
@@ -1967,8 +2069,12 @@ void __fastcall TForm1::OnEditParam()
             TParamlistItem item = param->listitem[i];
 
 
-            String condition = ReplaceVariables(&m_env_var, item.visibleif);  // Подстановка предопределенных значений в среде
-            condition = ReplaceVariables(&CurrentQueryItem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
+            String condition = ReplaceVariables(envVariables, item.visibleif);  // Подстановка предопределенных значений в среде
+            //String condition = ReplaceVariables(&m_env_var, item.visibleif);  // Подстановка предопределенных значений в среде
+
+
+
+            condition = ReplaceVariables(CurrentQueryItem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
 
             //if (GetDefinedValue(condition) == "true")
             //  item.visibleflg = true;
@@ -2175,7 +2281,7 @@ void __fastcall TForm1::ActionShowHelpExecute(TObject *Sender)
 // Скопировать текст запроса
 void __fastcall TForm1::ActionCopyQueryExecute(TObject *Sender)
 {
-    AnsiString str = GetSQL(CurrentQueryItem->querytext);
+    AnsiString str = GetSQL(CurrentQueryItem->querytext, &CurrentQueryItem->UserParams);
     Clipboard()->AsText = str;
     //FormShowQuery->ShowQuery(str, CurrentQueryItem->queryname);
 }
@@ -2187,7 +2293,7 @@ void __fastcall TForm1::ActionCopyQueryExecute(TObject *Sender)
 void __fastcall TForm1::ActionShowMainQueryExecute(TObject *Sender)
 {
     if (CurrentQueryItem->querytext != "") {
-        AnsiString str = GetSQL(CurrentQueryItem->querytext);
+        AnsiString str = GetSQL(CurrentQueryItem->querytext, &CurrentQueryItem->UserParams);
         FormShowQuery->ShowQuery(str, "SQL-текст основного запроса \"" + CurrentQueryItem->queryname + "\"");
     } else {
         MessageBoxInf("Текст основного запроса отсутствует.\n");
@@ -2201,7 +2307,7 @@ void __fastcall TForm1::ActionShowMainQueryExecute(TObject *Sender)
 void __fastcall TForm1::ActionShowSecondaryQueryExecute(TObject *Sender)
 {
     if (CurrentQueryItem->querytext2 != "") {
-        AnsiString str = GetSQL(CurrentQueryItem->querytext2);
+        AnsiString str = GetSQL(CurrentQueryItem->querytext2, &CurrentQueryItem->UserParams);
         FormShowQuery->ShowQuery(str, "SQL-текст вспомогательного запроса \"" + CurrentQueryItem->queryname + "\"");
     } else {
         MessageBoxInf("Текст вспомогательного запроса отсутствует.\n");
@@ -2306,8 +2412,8 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
     // ФОРМИРОВАНИЕ СТРОКИ ЗАПРОСА
     AnsiString querytext;
     AnsiString querytext2;
-    querytext = GetSQL(CurrentQueryItem->querytext);    // Основной запрос
-    querytext2 = GetSQL(CurrentQueryItem->querytext2);  // Дополнительный запрос, может не использоваться (используется в отчетах MS Word)
+    querytext = GetSQL(CurrentQueryItem->querytext, &CurrentQueryItem->UserParams);    // Основной запрос
+    querytext2 = GetSQL(CurrentQueryItem->querytext2, &CurrentQueryItem->UserParams);  // Дополнительный запрос, может не использоваться (используется в отчетах MS Word)
 
     threadopt->querytext = querytext;
     threadopt->querytext2 = querytext2;

@@ -38,6 +38,8 @@
 //#include "ThreadSelect.h"
 
 
+typedef std::map<String, String> EnvVariables;
+
 // Режим экспорта данных
 typedef enum _EXPORTMODE {
     EM_UNDEFINITE = 0,
@@ -57,21 +59,6 @@ public:
     AnsiString visibleif;   // Условие, при котором элемент отображается
     bool visibleflg;        // Текущее состояние видимости с учетом visible и visibleif
 };
-
-//
-class ENVITEM
-{
-public:
-    __fastcall ENVITEM(const String& name, const String& value);//(AnsiString name, AnsiString value);
-	String name;
-	String value;
-};
-
-__fastcall ENVITEM::ENVITEM(const String& name, const String& value)
-{
-    this->name = name;
-    this->value = value;
-}
 
 // Структура для хранения параметров запроса
 class TParamRecord
@@ -169,7 +156,10 @@ typedef struct {    // Для описания формата ячеек в Excel
     bool fAllowUnassignedFields;
     std::vector<DBASEFIELD> Fields;    // Список полей для экспрта в файл DBF
 } EXPORT_PARAMS_DBASE;
-                               
+
+
+typedef std::vector<TParamRecord> QueryVariables;
+
 // Структура для сохранения Запроса и параметров к нему
 class TQueryItem {
 public:
@@ -197,9 +187,9 @@ public:
     EXPORT_PARAMS_WORD param_word;
     EXPORT_PARAMS_EXECUTE param_execute;
 
-    std::vector<ENVITEM> Variables;         // Переменные
+    EnvVariables Variables;         // Переменные
 
-    std::vector<TParamRecord> UserParams;    // Задаваемые параметры к запрос
+    QueryVariables UserParams;    // Задаваемые параметры к запрос
 
     bool fExcelFile;      // Флаг Excel в память
     //int fExcelFile;     // Флаг Excel в файл
@@ -216,11 +206,14 @@ public:
 
 #include "ThreadSelect.h"
 
+typedef std::vector<TQueryItem*> QueryItemList;
+
 class TTabItem {    // Структура, для хранения структуры вкладок
 public:
     AnsiString name;
-    std::vector<TQueryItem*> queryitem;
+    QueryItemList queryitem;
 };
+
 
 
 //---------------------------------------------------------------------------
@@ -329,7 +322,9 @@ private:	// User declarations
     void ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem);  // Разбор xml в std::vector<TParamRecord>
     void ParseExportParamsStr(AnsiString ParamStr, TQueryItem* queryitem);  // Разбор xml в std::vector<TParamRecord>
     String GetValueFromSQL(String SQLText, String dbindex);
-    String GetSQL(String SQLText);   // Составление строки запроса с подстановкой значений и т.д. для выполнения
+
+    String GetSQL(const String& SQLText, QueryVariables* queryParams = NULL) const;   // Составление строки запроса с подстановкой значений и т.д. для выполнения
+
     String __fastcall GetValue(String value);
     AnsiString GetDefinedValue(AnsiString value);       // Оставлено для совместимости. В последущем полностью заменить GetValue
     void __fastcall DoExport(THREADOPTIONS* threadopt);
@@ -338,11 +333,16 @@ private:	// User declarations
 
     bool CheckCondition(AnsiString condition);
     void InitEnvVariables(); // Инициализации переменных среды
-    //void AddEnvVariable(String Name, String Value); // Добавление в переменные
-    String ReplaceEnvVariables(String condition);
-    String ReplaceVariables(std::vector<ENVITEM>* Variables, const String& Text);
+
+    String ReplaceVariables(EnvVariables &variables, const String& Text);
+
+
     int __fastcall DataSetToQueryList(TOraQuery* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list);
     TColor __fastcall ColorByIndex(int index);     // Возвращает цвет по индексу
+
+    void __fastcall AddEnvVariable(const String& name, const String& value);
+    void __fastcall AddSystemVariable(const String& name, const String& value);
+
 
     TOdacUtilLog* OdacLog;
     std::vector<TOraSession*> m_sessions;    // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
@@ -359,10 +359,11 @@ private:	// User declarations
     std::vector<String> DangerWords;    // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
     std::vector<TTabItem> TabList;       // Вектор разделов
     std::vector<TQueryItem> QueryList;   // Вектор строк заросов
-    std::vector<ENVITEM> m_env_var;     // Переменные среды
+
+
     std::vector<String> m_env_func;     // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
 
-    std::vector<unsigned int> m_vTabColor;  // Вектор цветов вкладок
+    std::vector<TColor> m_vTabColor;  // Вектор цветов вкладок
     unsigned int m_ColorIndex;
 
 
@@ -372,6 +373,8 @@ private:	// User declarations
     bool NumEdit_bUseDot;           // Переменные для функционирования NumEdit1
 
     std::map<String, TObject*> paramControls;
+
+    EnvVariables envVariables;      // Переменные среды
 
 public:
 	__fastcall TForm1(TComponent* Owner);
