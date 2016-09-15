@@ -35,10 +35,12 @@
 #include <Dialogs.hpp>
 #include <ImgList.hpp>
 #include <Mask.hpp>
-//#include "ThreadSelect.h"
+
+#include "parameter.h"
+#include "variables.h"
+#include "ParameterizedText.h"
 
 
-typedef std::map<String, String> EnvVariables;
 
 // Режим экспорта данных
 typedef enum _EXPORTMODE {
@@ -50,41 +52,8 @@ typedef enum _EXPORTMODE {
     EM_WORD_TEMPLATE    // Экспорт в шаблон MS Word
 } EXPORTMODE;
 
-// Структура элемента List в параметрах пользователя
-class TParamlistItem {
-public:
-    AnsiString value;       // Фактическое значение
-    AnsiString label;       // Отображаемое значение
-    AnsiString visible;     // Безусловный флаг видимости
-    AnsiString visibleif;   // Условие, при котором элемент отображается
-    bool visibleflg;        // Текущее состояние видимости с учетом visible и visibleif
-};
 
-// Структура для хранения параметров запроса
-class TParamRecord
-{
-public:
-    AnsiString type;    // Тип
-    AnsiString name;    // Внутреннее имя парамера
-    AnsiString value;   // Внутреннее? значение параметра
-    AnsiString value_src;   // Внутреннее (исходное) значение параметра
-    AnsiString label;   // Отображаемое имя парамера
-    AnsiString display; // Отображаемое значение параметра
-    AnsiString format;  // Формат вывода данных
-    AnsiString dbindex; // Индекс базы данных для загрузки списка значений (если в xml src )
-    AnsiString src;     // Индекс базы данных для загрузки списка значений (если в xml src )
-    AnsiString visible;         // Флаг
-    bool deleteifflg;   // Флаг удалять блок если value параметра равен значени deleteifval
-    AnsiString deleteifvalue;  // Флаг удалять блок если value параметра равен значени deleteifval
-    //std::vector <TParamlistItem> variables;   // Список возможных значений
-    std::vector <TParamlistItem> listitem;   // Список значений (для list и variables)
-    AnsiString visibleif;   // Зависимость
-    AnsiString disableif;   // Зависимость
-    AnsiString parent;      // Имя родительского параметра (пока не доработано)
 
-    bool visibleflg;    // вычисляемый параметр
-    AnsiString mask;    // Маска ввода
-};
 
 /*
 class TParamRecordCtrl : public TParamRecord
@@ -158,7 +127,7 @@ typedef struct {    // Для описания формата ячеек в Excel
 } EXPORT_PARAMS_DBASE;
 
 
-typedef std::vector<TParamRecord> QueryVariables;
+typedef std::vector<TParamRecord*> QueryVariables;
 
 // Структура для сохранения Запроса и параметров к нему
 class TQueryItem {
@@ -187,7 +156,11 @@ public:
     EXPORT_PARAMS_WORD param_word;
     EXPORT_PARAMS_EXECUTE param_execute;
 
-    EnvVariables Variables;         // Переменные
+
+
+
+    //Variables customVariables;         // Переменные настраиваемые
+    //Variables systemVariables;         // Переменные системные
 
     QueryVariables UserParams;    // Задаваемые параметры к запрос
 
@@ -326,7 +299,7 @@ private:	// User declarations
     String GetSQL(const String& SQLText, QueryVariables* queryParams = NULL) const;   // Составление строки запроса с подстановкой значений и т.д. для выполнения
 
     String __fastcall GetValue(String value);
-    AnsiString GetDefinedValue(AnsiString value);       // Оставлено для совместимости. В последущем полностью заменить GetValue
+   // AnsiString GetDefinedValue(AnsiString value);       // Оставлено для совместимости. В последущем полностью заменить GetValue
     void __fastcall DoExport(THREADOPTIONS* threadopt);
     bool __fastcall CheckLock(int dbindex);
     void __fastcall Run(EXPORTMODE ExportMode, int Tag = 0);
@@ -334,14 +307,8 @@ private:	// User declarations
     bool CheckCondition(AnsiString condition);
     void InitEnvVariables(); // Инициализации переменных среды
 
-    String ReplaceVariables(EnvVariables &variables, const String& Text);
-
-
     int __fastcall DataSetToQueryList(TOraQuery* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list);
     TColor __fastcall ColorByIndex(int index);     // Возвращает цвет по индексу
-
-    void __fastcall AddEnvVariable(const String& name, const String& value);
-    void __fastcall AddSystemVariable(const String& name, const String& value);
 
 
     TOdacUtilLog* OdacLog;
@@ -374,11 +341,20 @@ private:	// User declarations
 
     std::map<String, TObject*> paramControls;
 
-    EnvVariables envVariables;      // Переменные среды
+
+    Variables systemVariables;         // Переменные системные
+
+    //Variables customVariables;         // Переменные настраиваемые
+
+    void __fastcall AddSystemVariable(const String& name, const String& value);
+    void __fastcall AddCustomVariable(const String& name, const String& value);
+
 
 public:
 	__fastcall TForm1(TComponent* Owner);
     __fastcall ~TForm1();
+
+
 
     void __fastcall OnThread(int Status, AnsiString Message = "");
     void __fastcall OnThreadChangeStatus(int Status);

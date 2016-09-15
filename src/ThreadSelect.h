@@ -81,7 +81,7 @@ private:
     EXPORT_PARAMS_WORD param_word;      //
     EXPORT_PARAMS_DBASE param_dbase;
 
-    std::vector<TParamRecord> UserParams;    // Задаваемые параметры к запросу
+    std::vector<TParamRecord*> UserParams;    // Задаваемые параметры к запросу
 
     TThreadStatus ThreadStatus;
     AnsiString ThreadMessage;

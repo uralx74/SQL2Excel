@@ -25,6 +25,86 @@ const String TASKNAME = "SQL2EXCEL";
 const String mainSpr = "spr_task_sql2excel";
 const String envSpr = "spr_task_sql2excel_env";
 
+const String SYSTEM_VARIABLES_PREFIX = "$";
+const String CUSTOM_VARIABLES_PREFIX = "_";
+
+
+
+
+
+String function_compare(const std::vector<String>& parameters)
+{
+    if (parameters.size() != 2) {
+        return "error";
+    }
+    return parameters[0] == parameters[1]? "true" : "false";
+
+}
+
+String function_in(const std::vector<String>& parameters)
+{
+    if (parameters.size() < 2) {
+        return "error";
+    }
+
+    int k = 0;
+    for (std::vector<String>::const_iterator it = parameters.begin()+1; it != parameters.end(); ++it)
+    {
+        if (parameters[0] == *it ) {
+            return "true";
+        }
+    }
+
+    return "false";
+
+}
+
+
+
+/*
+String function_date(const std::vector<String>& parameters)
+{
+    if (parameters.size() != 5) {
+        return "error";
+    }
+
+    TDateTime ResultDate = Date();
+
+    String param_day = parameters[0];   // Кол-во дней
+    String param_month = parameters[1]; // Кол-во месяцев
+    String param_option_day = parameters[2];    // Точка отсчета дней
+    String param_option_month = parameters[3];  // Точка отсчета месяцев
+    String param_format = parameters[4];
+
+    // Вычисляем дату
+    // Сначала определим точку отсчета (день и месяц), если заданы специальные опции
+    // Текущий месяц (0), Первый месяц (1), последний месяц (2)
+    if (param_option_month == "1" || param_option_month == "first")
+    {
+        ResultDate = EncodeDate(YearOf(ResultDate), 1, DayOf(ResultDate));
+    } else if (param_option_month == "2" || param_option_month == "last")
+    {
+        ResultDate = EncodeDate(YearOf(ResultDate), 12, DayOf(ResultDate));
+    }
+
+    // Текущее число (0), Первый день месяца (1), последний день месяца (2)
+    if (param_option_day == "1" || param_option_day == "first")
+    {
+        ResultDate = EncodeDate(YearOf(ResultDate), MonthOf(ResultDate), 1);
+    }
+    else if (param_option_day == "2" || param_option_day == "last")
+    {
+        ResultDate = EncodeDate(YearOf(ResultDate), MonthOf(ResultDate), DaysInAMonth(ResultDate));
+    }
+
+    // Прибавляем дни и месяцы
+    ResultDate = IncMonth(ResultDate, StrToInt(param_month));
+    ResultDate = ResultDate + StrToInt(param_day);
+
+    String format = ExplodeByBackslash2(param_format, "'", "'", false)[0].text;  // извлекаем формат из кавычек
+    DateTimeToString(Result, format, ResultDate);
+}   */
+
 //---------------------------------------------------------------------------
 //
 __fastcall TForm1::TForm1(TComponent* Owner)
@@ -52,6 +132,9 @@ __fastcall TForm1::TForm1(TComponent* Owner)
     m_env_func.push_back("_compare(");  // Функция compare(Text, Text)
     m_env_func.push_back("_in(");       // Функция in(Text, set)
 
+    systemVariables.addFunction("_compare", function_compare);
+    systemVariables.addFunction("_in", function_in);
+
     // Список "опасных" слов
     DangerWords.reserve(4);
     DangerWords.push_back("execute");
@@ -67,6 +150,9 @@ __fastcall TForm1::TForm1(TComponent* Owner)
     //threadopt = new THREADOPTIONS;
 
     AppPath = ExtractFilePath(Application->ExeName);
+
+    //customVariables.setPrefix("_");
+    //systemVariables.setPrefix("$");
 }
 
 //---------------------------------------------------------------------------
@@ -159,26 +245,6 @@ bool __fastcall TForm1::Auth()
     }
 }
 
-/* Добавляет переменную среды
- */
-void __fastcall TForm1::AddEnvVariable(const String& name, const String& value)
-{
-    //envVariables.find(name)
-
-    //if (!envVariables.constains(name))
-    {
-        envVariables["_" + name] = value;
-    }
-}
-
-/* Добавляет переменную среды
- */
-void __fastcall TForm1::AddSystemVariable(const String& name, const String& value)
-{
-    {
-        envVariables["$"+name] = value;
-    }
-}
 //---------------------------------------------------------------------------
 // Загружает вектор
 int __fastcall TForm1::LoadQueryList()
@@ -345,19 +411,40 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
 
    	// Формируем список параметров
 	AnsiString xmlParams;
-    std::vector<TParamRecord>* ListParams = &queryitem->UserParams;
+    QueryVariables* params = &queryitem->UserParams;
 
     msxml.LoadXMLText(ParamStr);
 
     if (msxml.GetParseError() != "")
+    {
         return;
+    }
 
     Variant RootNode = msxml.GetRootNode();
     Variant node = msxml.GetFirstNode(RootNode);
 
     while (!node.IsEmpty())
     {
-        TParamRecord param;
+        TParamRecord* param = TParamRecord::createParameter(msxml, node);
+        params->push_back(param);
+
+
+        param->visibleflg = true;
+
+
+
+        node = msxml.GetNextNode(node);
+    }
+
+
+}
+
+
+
+
+
+
+/*
         param.type = LowerCase(msxml.GetAttributeValue(node, "type"));
         param.name = msxml.GetAttributeValue(node, "name");
         param.label = msxml.GetAttributeValue(node, "label");
@@ -368,27 +455,11 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
         param.visible = Trim(LowerCase(msxml.GetAttributeValue(node, "visible")));
         param.visibleif = Trim(LowerCase(msxml.GetAttributeValue(node, "visibleif")));
 
-        //param.Control = (TObject*) Edit1;
-
-
-        if (param.name == "uchastok" )
-        {
-            param.value = param.value;
-        }
-
-
-        //TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
-        //param.value_src = StringReplace(param.value_src, "--", "_", replaceflags); // Для совместимости
-        //param.visibleif= StringReplace(param.visibleif, "--", "_", replaceflags); // Для совместимости
-
         // Тест!!!!!!!
         param.parent = msxml.GetAttributeValue(node, "parent");
+
         param.value_src = msxml.GetAttributeValue(node, "value");
-
-
-        //param.value_src = ReplaceVariables(&m_env_var, param.value_src);
         param.value_src = ReplaceVariables(envVariables, param.value_src);
-
 
         param.value = ReplaceVariables(queryitem->Variables, param.value_src);
         param.value = GetDefinedValue(param.value);     // Доработать здесь!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -398,19 +469,13 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
 
             //String condition = ReplaceVariables(&m_env_var, param.visibleif);  // Подстановка предопределенных значений в среде
 
-
-
             String condition = ReplaceVariables(envVariables, param.visibleif);  // Подстановка предопределенных значений в среде
-
-
             condition = ReplaceVariables(queryitem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
 
             if (GetDefinedValue(condition) == "true")
                 param.visibleflg = true;
             else
                 param.visibleflg = false;
-            //param.visibleflg = CheckCondition(condition);
-            //param.visibleflg = CheckCondition(param.visibleif);
         } else {
             if (param.visible == "false")   // visible имеет приоритет над visibleif
                 param.visibleflg = false;
@@ -437,159 +502,27 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
         }
         else if (param.type == "string" )
         {
-            param.display = param.value;
-            param.mask = msxml.GetAttributeValue(node, "mask");
         }
         if (param.type == "integer" )
         {
-            param.display = param.value;
         }
         if (param.type == "float" )
         {
-            param.display = param.value;
         }
         else if (param.type == "date")
         {
-            if (param.value == "")
-                param.value = DateToStr(Now());
-
-            param.display = param.value;
-
-            try {
-                // Преобразовываем дату в строку в нужном формате
-                if (param.format != "") {
-                    AnsiString oldShortDateFormat = ShortDateFormat;
-                    AnsiString oldDateSeparator = DateSeparator;
-                    ShortDateFormat = "dd.MM.yyyy";
-                    DateSeparator = '.';
-                    param.value = FormatDateTime(param.format, StrToDate(param.value));
-                    AnsiString ShortDateFormat = oldShortDateFormat;
-                    AnsiString DateSeparator = oldDateSeparator;
-                }
-            } catch (...){
-            }
         }
         else if (param.type == "list")       // Если тип параметра list
         {
-            Variant subnode = msxml.GetFirstNode(node);
 
-            // Если в опциях list-a отсутствует параметр value
-            // то value будет равно первому значению из списка
-            bool bParamValueExist = !msxml.GetAttribute(node, "value").IsEmpty();
-
-
-            /*AnsiString sqltext = "";
-            try {
-                sqltext = msxml.GetAttributeValue(subnode, "src");
-            } catch (...) {}  */
-
-            if (param.src != "") {    // Если задан sql-запрос
-
-                int dbindex = 0;
-                //AnsiString sdbindex = "";
-                //Variant DbIndexAttribute = msxml.GetAttribute(subnode, "dbindex");
-                //sdbindex = msxml.GetAttributeValue(subnode, "dbindex");
-                if (param.dbindex != "") {
-                    try {
-                        dbindex = StrToInt(param.dbindex);
-                    } catch (...) {}
-                } else {
-                    try {
-                        dbindex = StrToInt(queryitem->dbname);  //------------------------------------------------------------------------
-                    } catch (...) {}
-                    param.dbindex = IntToStr(dbindex);
-                }
-
-                try {
-                    //TOraSession *orasession = getSessionByIndex(dbindex);
-                    TOraSession *orasession = m_sessions[dbindex];
-                    orasession->Connected = true;
-
-                    TOraQuery *OraQuery = new TOraQuery(NULL);
-                    OraQuery->Session = orasession;
-                    OraQuery->SQL->Add(param.src);
-                    OraQuery->Open();
-
-                    TParamlistItem item;
-
-                    while (!OraQuery->Eof) {
-                        item.value = OraQuery->FieldByName("value")->AsString;
-                        item.label = OraQuery->FieldByName("label")->AsString;
-                        param.listitem.push_back(item);
-                        OraQuery->Next();
-                    }
-
-                    OraQuery->Close();
-                    delete OraQuery;
-                } catch (...) {}
-            } else {            // Если задан список значений
-
-                // Если в списке значений компонента list отсутствует параметр value
-                // то проставляем значение value для каждого item-a
-                bool bValueAutoInc = msxml.GetAttribute(subnode, "value").IsEmpty();
-                int i = 0;
-                while (!subnode.IsEmpty()) {
-                    TParamlistItem item;
-                    item.value = bValueAutoInc? IntToStr(i++) : msxml.GetAttributeValue(subnode, "value");
-                    item.label = msxml.GetAttributeValue(subnode, "label");
-                    item.visible = Trim(LowerCase(msxml.GetAttributeValue(subnode, "visible")));
-                    item.visibleif = Trim(LowerCase(msxml.GetAttributeValue(subnode, "visibleif")));
-
-                    if (item.visible == "" && item.visibleif != "") {  // visible имеет приоритет над visibleif
-                        String condition = ReplaceVariables(envVariables, item.visibleif);  // Подстановка предопределенных значений в среде
-                        condition = ReplaceVariables(queryitem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
-
-                        if (GetDefinedValue(condition) == "true")
-                            item.visibleflg = true;
-                        else
-                            item.visibleflg = false;
-
-
-                        //item.visibleflg = CheckCondition(condition);
-                        //item.visibleflg = CheckCondition(item.visibleif);
-                        //if (record->visibleif != "" && CheckCondition(record->visibleif) != true) {
-                        //AnsiString s = "s";
-                    } else {
-                        if (item.visible == "false")   // visible имеет приоритет над visibleif
-                            item.visibleflg = false;
-                        else
-                            item.visibleflg = true;
-                    }
-
-
-                    param.listitem.push_back(item);
-                    subnode = msxml.GetNextNode(subnode);
-                }
-
-                // Задаем значение по умолчанию равным первому из списка
-                // но только если параметр param.value не задан явно
-                if (!bParamValueExist && param.value == "" && param.listitem.size() > 0) {
-                    param.value = param.listitem[0].value;
-                }
-            }
-
-            // Задаем отображение param.display в соответствии с param.value (выбираем из списка)
-            for (int j = 0; j < param.listitem.size(); j++)
-            {
-                if (param.value == param.listitem[j].value)
-                {
-                    param.display = param.listitem[j].label;
-                    break;
-                }
-            }
-
-            /*if (param.listitem.size() > ival) {
-                param.value = param.listitem[ival].value;
-                param.display = param.listitem[ival].label;
-            }*/
         }
-        ListParams->push_back(param);
+        params->push_back(param);
         node = msxml.GetNextNode(node);
     }
 }
 
-//---------------------------------------------------------------------------
-// Разбор xml-текста параметров для экспорта
+/* Разбор xml-текста параметров экспорта
+ */
 void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 {
     if (ParseStr == "") {
@@ -770,8 +703,8 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
     }
 }
 
-//---------------------------------------------------------------------------
-//
+/*
+ */
 void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
 {
     // Проверяем не заблокированы ли запросы к БД
@@ -883,24 +816,22 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
     delete threadopt;
 }
 
-
-//---------------------------------------------------------------------------
-// Выполнение запроса, установленного "По умолчанию"
+/* Выполнение запроса, установленного "По умолчанию"
+ */
 void __fastcall TForm1::ActionDefaultRunExecute(TObject *Sender)
 {
     Run(CurrentQueryItem->DefaultExportType);
 }
 
-//---------------------------------------------------------------------------
-//
+/**/
 void __fastcall TForm1::ActionAsProcedureExecute(TObject *Sender)
 {
     Run(CurrentQueryItem->DefaultExportType);
 }
 
 
-//---------------------------------------------------------------------------
-// Экспорт в файл Excel
+/* Экспорт в файл Excel
+ */
 void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
 {
     if (CurrentQueryItem->param_excel.template_name == "")
@@ -910,8 +841,8 @@ void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
 
 }
 
-//---------------------------------------------------------------------------
-// Экспорт в Excel (в память)
+/* Экспорт в Excel (в память)
+ */
 void __fastcall TForm1::ActionExportExcelBlankExecute(TObject *Sender)
 {
     if (CurrentQueryItem->param_excel.template_name == "")
@@ -920,23 +851,23 @@ void __fastcall TForm1::ActionExportExcelBlankExecute(TObject *Sender)
         Run(EM_EXCEL_TEMPLATE, 0);
 }
 
-//---------------------------------------------------------------------------
-// Экспорт в MS Word
+/* Экспорт в MS Word
+ */
 void __fastcall TForm1::ActionExportWordFileExecute(TObject *Sender)
 {
     Run(EM_WORD_TEMPLATE);
 }
 
-//---------------------------------------------------------------------------
-// Экспорт в файл DBASE4
+/* Экспорт в файл DBASE4
+ */
 void __fastcall TForm1::ActionExportDbfFileExecute(TObject *Sender)
 {
     Run(EM_DBASE4_FILE);
 }
 
 
-//---------------------------------------------------------------------------
-//
+/*
+ */
 void __fastcall TForm1::FormClose(TObject *Sender, TCloseAction &Action)
 {
     QueryList.clear();
@@ -944,8 +875,8 @@ void __fastcall TForm1::FormClose(TObject *Sender, TCloseAction &Action)
     DangerWords.clear();
 }
 
-//---------------------------------------------------------------------------
-//
+/*
+ */
 String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 {
     DinamicControlExit(NULL);
@@ -972,8 +903,8 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
             {
                 //int k = Parameters[SelIndex][j].value.Pos(DangerWords[i]);
                 //AnsiString s = CurrentQueryItem->Parameters[j].value;
-                if ( (*queryParams)[j].value.Pos(DangerWords[i]) != 0) {
-                    (*queryParams)[j].value = "";
+                if ( (*queryParams)[j]->value.Pos(DangerWords[i]) != 0) {
+                    (*queryParams)[j]->value = "";
                     break;
                 }
             }
@@ -994,11 +925,16 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
             item->text = StringReplace(item->text, "/**", "", replaceflags);
  			item->text = StringReplace(item->text, "**/", "", replaceflags);     // Удаляем **/
 
+            ParameterizedText paramText(item->text);
+            paramText.replaceVariables(systemVariables);
+            item->text = paramText.getText();
+
+
             // Подстановка переменных среды
-            for (EnvVariables::const_iterator it = envVariables.begin(); it != envVariables.end(); it ++)
+            /*for (EnvVariables::const_iterator it = envVariables.begin(); it != envVariables.end(); it ++)
             {
                 item->text = StringReplace(item->text, it->first, it->second, replaceflags);
-            }
+            }*/
 
             // Подстановка переменных - параметров
             //item->text = item->text.LowerCase();  // 2016-07-06
@@ -1010,7 +946,7 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
             if ( queryParams != NULL ) {
                 for (QueryVariables::size_type j = 0; j < (*queryParams).size(); j++) {   //Заменяем --Параметр на Значение
                     TParamRecord *param;
-                    param = &(*queryParams)[j];
+                    param = (*queryParams)[j];
 
                     param->name = param->name.Trim();		// Удаляем пробелы
                     param->value = param->value.Trim();		// Удаляем пробелы
@@ -1030,9 +966,6 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
                 }
             }
 
-
-
-
               /*if (!bParamFined)   // Удаляем строку с параметром, если отсутствуют подходящие параметры в списке
                 item->text = "" + item->text + " ERROR! ONE OF THESE PARAMETERS NOT FOUND!";   */
         }
@@ -1050,164 +983,6 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
     return result;  // Собираем вектор в строку и возращаем результат
 }
 
-//---------------------------------------------------------------------------
-// В последующем вставить эту функцию в taskutil.h
-String __fastcall TForm1::GetValue(String value)
-{
-    if (value.Length() < 2 || value[1] != '_' )
-        return value;
-
-    //String f_date = '_date('
-    //vector<String>::iterator cur;
-    //for (cur = m_env_func.begin(); cur <m_env_func.end() - 1; cur++) {
-
-
-    String Result;
-    int n = m_env_func.size();
-    for (int i = 0; i < n; i++) {
-        if (value.Pos(m_env_func[i]) != 1)
-            continue;
-
-        // Получаем строку с параметрами
-        std::vector<EXPLODESTRING2> sqlstring;
-        sqlstring = ExplodeByBackslash2(value, m_env_func[i], ")");
-        std::vector<AnsiString> params;
-
-        // Разбиваем строку с параметрами с разделителем - (,)
-        if (sqlstring[1].fBacksleshed) {
-            params = Explode(sqlstring[1].text, ",", false);
-        }
-
-        int n_params = params.size();
-        switch (i) {
-            // Функция _date(v1, v2, p1, p2, format)
-            // Возвращает дату, рассчитываемую с учетом задаваемой опциями точкой отсчета
-            case 0:
-            {
-                TDateTime ResultDate = Date();
-
-                 // Обработка параметров
-                if ( n_params == 5) {
-                    String param_day = params[0];   // Кол-во дней
-                    String param_month = params[1]; // Кол-во месяцев
-                    String param_option_day = params[2];    // Точка отсчета дней
-                    String param_option_month = params[3];  // Точка отсчета месяцев
-                    String param_format = params[4];
-                    //break;
-
-                    // Вычисляем дату
-                    // Сначала определим точку отсчета (день и месяц), если заданы специальные опции
-                    // Текущий месяц (0), Первый месяц (1), последний месяц (2)
-                    if (param_option_month == "1" || param_option_month == "first") {
-                        ResultDate = EncodeDate(YearOf(ResultDate), 1, DayOf(ResultDate));
-                    } else if (param_option_month == "2" || param_option_month == "last") {
-                        ResultDate = EncodeDate(YearOf(ResultDate), 12, DayOf(ResultDate));
-                    }
-
-                    // Текущее число (0), Первый день месяца (1), последний день месяца (2)
-                    if (param_option_day == "1" || param_option_day == "first") {
-                        ResultDate = EncodeDate(YearOf(ResultDate), MonthOf(ResultDate), 1);
-                    } else if (param_option_day == "2" || param_option_day == "last") {
-                        ResultDate = EncodeDate(YearOf(ResultDate), MonthOf(ResultDate), DaysInAMonth(ResultDate));
-                    }
-
-                    // Прибавляем дни и месяцы
-                    ResultDate = IncMonth(ResultDate, StrToInt(param_month));
-                    ResultDate = ResultDate + StrToInt(param_day);
-
-                    String format = ExplodeByBackslash2(param_format, "'", "'", false)[0].text;  // извлекаем формат из кавычек
-                    DateTimeToString(Result, format, ResultDate);
-                }
-
-                break;
-            }
-            case 1: // m_env_func[i] = "_sql("
-            {
-                Result = GetValueFromSQL(params[0], params[1]);
-                break;
-            }
-
-            // Функция _compare(val1, val2)
-            // Сравненивает два значения на равенство
-            case 2:
-            {
-                if (n_params != 2)
-                    Result = "error";//value;
-                else
-                    Result = params[0] == params[1]? "true" : "false";
-
-                break;
-
-               /*
-                 if (condition.Trim() == "")
-                    return false;
-               vector<AnsiString> t;
-                t = Explode(condition, "=", false);
-                if (t.size() == 1)
-
-
-                if (t.size() == 1) {
-                t[0] = t[0].LowerCase();
-                if (t[0]=="true")
-                    return true;
-                else
-                    return false;
-                }
-                else if (t.size() != 2) {
-                return false;
-                } else
-                return t[0] == t[1];  */
-
-
-            }
-            // Функция _in(val1, {v1,v2,v3,...})
-            // Проверяет вхождения значения во множество
-            case 3:
-            {
-                if (n_params != 2)
-                    Result = "error";
-                else {
-                    Result = "false";
-                    String value = params[0];
-
-                    String tmp = ExplodeByBackslash2(params[1], "{", "}", false)[0].text;
-                    std::vector<AnsiString> vset;
-                    vset = Explode(tmp, ",", false);
-
-                    int n_vsetsize = vset.size();
-                    if (n_vsetsize > 0) {
-                        for (int j = 0; j < n_vsetsize; j++) {
-                            if (value == vset[j])
-                                Result = "true";
-                        }
-                    } else {        // Ошибка
-                        Result = "error";
-                    }
-                }
-                break;
-            }
-        }
-
-    }
-    return Result;
-}
-
-
-//---------------------------------------------------------------------------
-// Оставлена для совместимости со старым форматом даты.
-// В последующем заменить одной функцией GetValue // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-AnsiString TForm1::GetDefinedValue(AnsiString value)
-{
-    if (value.Length() < 2 || value[1] != '_')
-        return value;
-
-    int aaa = value.Pos("_date(");
-    int bbb = value.Pos("_sql(");
-    int ccc = value.Pos("_compare(");
-    int ddd = value.Pos("_in(");
-    if (aaa || bbb || ccc || ddd)
-        return GetValue(value);
-}
 
 //---------------------------------------------------------------------------
 // Инициализация переменных среды
@@ -1253,7 +1028,7 @@ void TForm1::InitEnvVariables()
             // Пополняем список перменных среды - по столбцам
             for (int i = 1; i <= EnvVarQueries->FieldCount; i++)
             {
-                AddEnvVariable(EnvVarQueries->Fields->FieldByNumber(i)->DisplayName,
+                AddCustomVariable(EnvVarQueries->Fields->FieldByNumber(i)->DisplayName,
                     EnvVarQueries->Fields->FieldByNumber(i)->AsString);
             }
             // Пополняем список перменных среды - по строкам
@@ -1311,7 +1086,7 @@ void TForm1::InitEnvVariables()
     OraQuery->Close();
     delete OraQuery;
 
-    AddEnvVariable("roles", roles.LowerCase());
+    AddSystemVariable("roles", roles.LowerCase());
 
 
     /*m_env_var.push_back(ENVITEM("_filial",filial));
@@ -1319,6 +1094,18 @@ void TForm1::InitEnvVariables()
     m_env_var.push_back(ENVITEM("_username", Username.LowerCase()));
     m_env_var.push_back(ENVITEM("_roles", roles.LowerCase()));*/
 }
+
+void __fastcall TForm1::AddCustomVariable(const String& name, const String& value)
+{
+    systemVariables.addVariable(CUSTOM_VARIABLES_PREFIX + name, value);
+}
+
+void __fastcall TForm1::AddSystemVariable(const String& name, const String& value)
+{
+    systemVariables.addVariable(SYSTEM_VARIABLES_PREFIX + name, value);
+}
+
+
 
 //---------------------------------------------------------------------------
 // Обработчик событий в потоке
@@ -1523,8 +1310,11 @@ void __fastcall TForm1::ListBox1DrawItem(TWinControl *Control, int Index,
 
     std::string text1;      // Верхняя строка
     std::string text2;      // Нижняя строка
+
     std::string str = pListBox->Items->Strings[Index].c_str();
 
+
+    
     //Разделение строки по символу перевода строки \n
     //AnsiString str = pListBox->Items->Strings[Index];
     // Разбиваем строки
@@ -1599,7 +1389,7 @@ void __fastcall TForm1::ListBox1DrawItem(TWinControl *Control, int Index,
         DrawFocusRect(pCanvas->Handle, &Rect);
     }
 
-    pCanvas->Unlock();
+    pCanvas->Unlock();     
 }
 
 
@@ -1610,22 +1400,34 @@ void TForm1::FillParametersLV()
     //MessageBoxStop("Параметры содержат недопустимые значения!\nИзмените значения параметров!");
 
     if (ListBox1->ItemIndex < 0)
+    {
         ListBox1->ItemIndex = 0;
+    }
 
     TQueryItem* qi = TabList[TabControl1->TabIndex].queryitem[ListBox1->ItemIndex];
     if (CurrentQueryItem == qi)
+    {
         return;
+    }
 
     // Важное место!!! Установка выбранного запроса
     CurrentQueryItem = qi;
 
     ParamsLV->Items->BeginUpdate();
     ParamsLV->Items->Clear();
-	for (unsigned int i = 0; i < CurrentQueryItem->UserParams.size(); i++) {
-        TParamRecord *record = &CurrentQueryItem->UserParams[i];
 
-        if (!record->visibleflg)
+
+
+
+
+
+	for (unsigned int i = 0; i < CurrentQueryItem->UserParams.size(); i++)
+    {
+        TParamRecord *record = CurrentQueryItem->UserParams[i];
+
+        if (!record->visibleflg) {
             continue;
+        }
 
         /*if (record->visibleif != "" && CheckCondition(record->visibleif) != true) {
             continue;
@@ -1724,34 +1526,6 @@ String TForm1::ReplaceEnvVariables(AnsiString condition)
     return condition;
 } */
 
-//---------------------------------------------------------------------------
-// Подстановка переменных, определенных в QUERYITEM (локальных)
-//AnsiString TForm1::ReplaceQueryVariables(std::vector<TParamRecord>* ListParams)
-//String TForm1::ReplaceVariables(std::vector<ENVITEM>* Variables, const String& Text)
-String TForm1::ReplaceVariables(EnvVariables &variables, const String& Text)
-{
-    if (variables.size() < 1 || Text.Length() < 1)
-    {
-        return Text;
-    }
-        
-    static const TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
-    String Result = Text;
-
-
-    for (EnvVariables::const_iterator it = variables.begin(); it != variables.end(); it ++)
-    {
-        Result = StringReplace(Result, it->first, it->second, replaceflags);
-    }
-
-
-    /*for (std::vector<ENVITEM>::iterator it = (*Variables).begin() ; it != (*Variables).end(); ++it) {
-        Result = StringReplace(Result, it->name, it->value, replaceflags);
-    }*/
-
-
-    return Result;
-}
 
 //---------------------------------------------------------------------------
 // Рисование вкладок
@@ -1885,11 +1659,23 @@ void __fastcall TForm1::Timer1Timer(TObject *Sender)
 // Прячет динамический элемент управления для редактирования параметра
 void __fastcall TForm1::DinamicControlExit(TObject *Sender)
 {
+
+
+
+
+
+
+
+
+
+
+
+
     if (Sender != NULL)
     {
         TControl *Control = (TControl*)Sender;
         Control->Visible = false;
-        TParamRecord *param = &CurrentQueryItem->UserParams[Control->Tag];
+        TParamRecord *param = CurrentQueryItem->UserParams[Control->Tag];
         if (param->type == "list")
         {
             TComboBox *ComboBox = (TComboBox*)Sender;
@@ -1899,19 +1685,23 @@ void __fastcall TForm1::DinamicControlExit(TObject *Sender)
                 //for(param->listitem)
                 int n = 0;
                 int i = 0;  // Индекс элемента в векторе
-                for (i = 0; i < param->listitem.size(); i++) { // пропуск скрытых элементов (visibleflg = false)
-                    param->listitem[i];
-                    if (!param->listitem[i].visibleflg)
+                for (i = 0; i < ((TListParameter*)param)->listitem.size(); i++) { // пропуск скрытых элементов (visibleflg = false)
+                    //param->listitem[i];
+                    if (!((TListParameter*)param)->listitem[i].visibleflg)
                         continue;
                     if (n == ComboBox->ItemIndex) {
                         break;
                     }
                     n++;
                 }
-                if (param->listitem[i].value != "")
-                    param->value = param->listitem[i].value;
+                if (((TListParameter*)param)->listitem[i].value != "")
+                {
+                    param->value = ((TListParameter*)param)->listitem[i].value;
+                }
                 else
+                {
                     param->value = IntToStr(ComboBox->ItemIndex);
+                }
 
             }
             /*// Тест - зависимые параметры - свойство parent
@@ -1938,7 +1728,7 @@ void __fastcall TForm1::DinamicControlExit(TObject *Sender)
             else
                 param->value = FormatDateTime(param->format, DateTimePicker->DateTime);
         } else if (param->type == "string") {
-            if (param->mask == "") {
+            if (((TStringParameter*)param)->mask == "") {
                 TEdit* EditBox = (TEdit*)Sender;
                 param->display = EditBox->Text;
             } else {
@@ -2011,7 +1801,7 @@ void __fastcall TForm1::OnEditParam()
     int n = 0;
     int paramitem_index = 0;  // Индекс элемента в векторе параметров CurrentQueryItem->Parameters
     for (paramitem_index = 0; paramitem_index < CurrentQueryItem->UserParams.size(); paramitem_index++) {
-        TParamRecord *param = &CurrentQueryItem->UserParams[paramitem_index];
+        TParamRecord *param = CurrentQueryItem->UserParams[paramitem_index];
         if (!param->visibleflg) // пропуск скрытых элементов (visibleflg = false)
             continue;
         if (n == LV_itemindex) {
@@ -2021,7 +1811,7 @@ void __fastcall TForm1::OnEditParam()
     }
 
     TParamRecord *param;
-    param = &CurrentQueryItem->UserParams[paramitem_index];
+    param = CurrentQueryItem->UserParams[paramitem_index];
 
     //TWinControl *Control;
 
@@ -2064,30 +1854,23 @@ void __fastcall TForm1::OnEditParam()
 
         ComboBox1->Clear();
         int cur_item=0; // Текущий элемент. i-не подходит, так как добавляться могут не все элементы
-        for (int i=0; i < param->listitem.size();i++)
+        for (int i=0; i < ((TListParameter*)param)->listitem.size();i++)
         {
-            TParamlistItem item = param->listitem[i];
+            TParamlistItem item = ((TListParameter*)param)->listitem[i];
 
+            ParameterizedText paramText(item.visibleif);
+            paramText.replaceVariables(systemVariables);
+            String condition = paramText.getText();
 
-            String condition = ReplaceVariables(envVariables, item.visibleif);  // Подстановка предопределенных значений в среде
-            //String condition = ReplaceVariables(&m_env_var, item.visibleif);  // Подстановка предопределенных значений в среде
-
-
-
-            condition = ReplaceVariables(CurrentQueryItem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
-
-            //if (GetDefinedValue(condition) == "true")
-            //  item.visibleflg = true;
-            //else
-            //  item.visibleflg = false;
-
-            if (item.visibleif != "" && GetDefinedValue(condition) != "true") {
+            if (item.visibleif != "" && condition != "true")
+            {
                 //bool k = CheckCondition(item.visibleif);
                 continue;
             }
 
             ComboBox1->Items->Add(item.label);
-            if (item.label == param->display) {
+            if (item.label == param->display)
+            {
                 ComboBox1->ItemIndex = cur_item;
             }
             cur_item++;
@@ -2098,7 +1881,8 @@ void __fastcall TForm1::OnEditParam()
 
         //CurrentDinamicControl = ComboBox1;
     } else if (param->type == "string" /* || param->type == "integer" || param->type == "float"*/) {
-        if (param->mask == "") {
+        if ( ((TStringParameter*)param)->mask == "" )
+        {
             //TEdit* EditBox = new TEdit(this);
             Edit1->Parent = ParamsLV;
             Edit1->Width = width;
@@ -2111,8 +1895,10 @@ void __fastcall TForm1::OnEditParam()
             Edit1->Text = param->display;
             Edit1->Visible = true;
             Edit1->SetFocus();
-        } else {
-            MaskEdit1->EditMask = param->mask;
+        }
+        else
+        {
+            MaskEdit1->EditMask = ((TStringParameter*)param)->mask;
             MaskEdit1->Parent = ParamsLV;
             MaskEdit1->Width = width;
             MaskEdit1->Top=top;
@@ -2125,7 +1911,9 @@ void __fastcall TForm1::OnEditParam()
             MaskEdit1->Visible = true;
             MaskEdit1->SetFocus();
         }
-    } else if (param->type == "integer" || param->type == "float") {
+    }
+    else if (param->type == "integer" || param->type == "float")
+    {
         NumEdit_bUseSign = true;
         NumEdit_bUseDot = param->type == "float";
         NumEdit1->Parent = ParamsLV;
@@ -2195,7 +1983,7 @@ void __fastcall TForm1::ParamsLVAdvancedCustomDraw(
 
         pCanvas->Font->Size = 10;
 
-        bool bSeparator = CurrentQueryItem->UserParams[Item->Index].type == "separator";
+        bool bSeparator = CurrentQueryItem->UserParams[Item->Index]->type == "separator";
 
         if (!bSeparator) {
             // Если не разделитель
