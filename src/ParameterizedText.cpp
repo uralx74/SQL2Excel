@@ -1,42 +1,39 @@
-//---------------------------------------------------------------------------
-
 #include <vcl.h>
 #pragma hdrstop
 
 #include "ParameterizedText.h"
 
-
+/*
+ */
 ParameterizedText::ParameterizedText(const String& text) :
     _sourceText(text),
-    _text("")
+    _text(text)
 
 {
     replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
     //replaceflags = replaceflags << rfReplaceAll << rfIgnoreCase;
 }
 
+/* Производит замену именованных фрагментов в тексте
+ */
 bool ParameterizedText::replaceVariables(const Variables& variables)
 {
-    // Подстановка переменных среды
-    /*for (EnvVariables::const_iterator it = variables.begin(); it != variables.end(); it ++)
-    {
-        _text = StringReplace(_sourceText, it->first, it->second, replaceflags);
-    }*/
-
-    _text = variables.replaceInText(_sourceText);
-
+    _text = variables.replaceInText(_text);
 }
 
+/* Производит сброс буффера в исходное состояние
+ */
 void ParameterizedText::reset()
 {
-    _text = "";
+    _text = _sourceText;
 }
 
+/* Возвращает текущее состояние
+ */
 String ParameterizedText::getText()
 {
     return _text;
 }
-
 
 void ParameterizedText::setSouceText(const String& text)
 {

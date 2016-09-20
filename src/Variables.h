@@ -6,18 +6,16 @@
 #include <map.h>
 #include <vector.h>
 #include <sstream>
-/*
-
-
+/* Класс для храннения значения или ссылки на функцию,
+   использующихся в качестве параметров запросов
 */
-
+typedef String (*EnvFunctionType)(const std::vector<String>&);
 
 class EnvFunction
 {
 public:
     EnvFunction();
     EnvFunction(const String& value);
-    //EnvFunction( String (*func)(const String&) );
     EnvFunction( String (*func)(const std::vector<String>&) );
 
     String getValue();
@@ -27,16 +25,12 @@ public:
 public:
     String _value;
     String (*_func)(const std::vector<String>&);
-    //String (*_func)(const String&);
     std::vector<String> _parameters;
-    //String _parameters;
 };
 
 
 
-/*
-
-
+/* Класс для работы с EnvFunction
 */
 typedef std::map<String, EnvFunction> VariableList;
 // contains      ^ Name  ^ Value
@@ -49,18 +43,15 @@ public:
     String replaceInText(const String& text);
     void __fastcall addVariable(const String& name, const String& value);
     void __fastcall addFunction(const String& name, String (*func)(const std::vector<String>&) );
-    //void __fastcall addFunction(const String& name, String (*func)(const String&) );
 
     void setPrefix(const String& prefix);
+    String getVariables();
 
 private:
     String _prefix;
     VariableList _variables;
     TReplaceFlags replaceflags;
 };
-
-
-
 
 
 //---------------------------------------------------------------------------

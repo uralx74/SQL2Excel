@@ -22,7 +22,7 @@ using namespace std;
 TForm1 *Form1;
 const String TASKNAME = "SQL2EXCEL";
 
-const String mainSpr = "spr_task_sql2excel";
+const String mainSpr = "spr_task_sql2excel_t";
 const String envSpr = "spr_task_sql2excel_env";
 
 const String SYSTEM_VARIABLES_PREFIX = "$";
@@ -32,6 +32,10 @@ const String CUSTOM_VARIABLES_PREFIX = "_";
 
 
 
+
+/* Сравнивает два значения
+   2016-09-20 IS DEPRECATED!
+*/
 String function_compare(const std::vector<String>& parameters)
 {
     if (parameters.size() != 2) {
@@ -41,6 +45,10 @@ String function_compare(const std::vector<String>& parameters)
 
 }
 
+/* Проверяет входит ли значение в список
+     parameters[0] - проверяемое значение
+     parameters[1 + N] - элементы списка (N от 0 до бесконечности)
+ */
 String function_in(const std::vector<String>& parameters)
 {
     if (parameters.size() < 2) {
@@ -56,12 +64,15 @@ String function_in(const std::vector<String>& parameters)
     }
 
     return "false";
-
 }
 
-
-
-/*
+/* Вычисляет дату
+     parameters[0] - инкремент дней
+     parameters[1] - инкремент месяцев
+     parameters[2] - точка отсчета дней (0 - текущий, 1 - первый, 2 - последний)
+     parameters[3] - точка отсчета месяцев
+     parameters[4] - формат вывода
+ */
 String function_date(const std::vector<String>& parameters)
 {
     if (parameters.size() != 5) {
@@ -102,8 +113,25 @@ String function_date(const std::vector<String>& parameters)
     ResultDate = ResultDate + StrToInt(param_day);
 
     String format = ExplodeByBackslash2(param_format, "'", "'", false)[0].text;  // извлекаем формат из кавычек
-    DateTimeToString(Result, format, ResultDate);
-}   */
+    String result;
+
+    DateTimeToString(result, format, ResultDate);
+
+    return result;
+}
+
+
+/* Производит обработку строки путем подстановки параметров и функций
+*/
+String calculateValue(const String& value)
+{
+    ParameterizedText paramText(value);
+    paramText.replaceVariables(systemVariables);
+    paramText.replaceVariables(systemFunctions);
+    String result = paramText.getText();
+
+    return result;
+}
 
 //---------------------------------------------------------------------------
 //
@@ -126,34 +154,33 @@ __fastcall TForm1::TForm1(TComponent* Owner)
 
 
     // Список функций
-    m_env_func.reserve(4);
-    m_env_func.push_back("_date(");     // Функция date(,,,,)
-    m_env_func.push_back("_sql(");      // Функция sql(Text, DBIndex)
-    m_env_func.push_back("_compare(");  // Функция compare(Text, Text)
-    m_env_func.push_back("_in(");       // Функция in(Text, set)
+    systemFunctions.addFunction("$compare", function_compare);
+    systemFunctions.addFunction("$in", function_in);
+    systemFunctions.addFunction("$date", function_date);
+    systemFunctions.addFunction("$sql", function_date);
 
-    systemVariables.addFunction("_compare", function_compare);
-    systemVariables.addFunction("_in", function_in);
+    //TParamRecord::addEditor("date", NULL);
+    //TParamRecord::addEditor("string", NULL);
+    //TParamRecord::addEditor(showListEditor);
+
+    TParamRecord::setValueCalculator(calculateValue);
 
     // Список "опасных" слов
-    DangerWords.reserve(4);
-    DangerWords.push_back("execute");
-    DangerWords.push_back("truncate");
-    //DangerWords.push_back("commit");
-    DangerWords.push_back("drop");
-    //DangerWords.push_back("insert");
-    //DangerWords.push_back("update");
-    //DangerWords.push_back("delete");
+    // для поиска в параметрах, вводимых пользователем
+    dangerWords.reserve(4);
+    dangerWords.push_back("execute");
+    dangerWords.push_back("truncate");
+    dangerWords.push_back("commit");
+    dangerWords.push_back("drop");
+    dangerWords.push_back("insert");
+    dangerWords.push_back("update");
+    dangerWords.push_back("delete");
 
     OdacLog = new TOdacUtilLog();
 
-    //threadopt = new THREADOPTIONS;
-
     AppPath = ExtractFilePath(Application->ExeName);
-
-    //customVariables.setPrefix("_");
-    //systemVariables.setPrefix("$");
 }
+
 
 //---------------------------------------------------------------------------
 // Возвращает цвет по индексу
@@ -201,11 +228,9 @@ bool __fastcall TForm1::PrepareForm()
     switch (result) {
     case -2:
 		MessageBoxStop("Отсутствуют доступные для текущего пользователя запросы. Программа будет закрыта!");
-        //this->Free();
         return false;
     case -1:
 	    MessageBoxStop("Не удалось открыть таблицу справочника запросов. Программа будет закрыта!");
-        //this->Free();
         return false;
     default:
         PrepareTabs();
@@ -252,7 +277,7 @@ int __fastcall TForm1::LoadQueryList()
     // Выбор запросов в соответствии с ролью пользователя и его именем
     AnsiString Str = "select * from ("
         " select * from ("
-        " SELECT spr_task_sql2excel.*, nvl(SYS.DBA_ROLE_PRIVS.GRANTED_ROLE, null) GRANTED_ROLE, row_number() over (partition by SPR_TASK_SQL2EXCEL_ID order by queryname) N FROM spr_task_sql2excel"
+        " SELECT qt.*, nvl(SYS.DBA_ROLE_PRIVS.GRANTED_ROLE, null) GRANTED_ROLE, row_number() over (partition by SPR_TASK_SQL2EXCEL_ID order by queryname) N FROM " + mainSpr + " qt "
         " LEFT join SYS.DBA_ROLE_PRIVS on GRANTEE = '" + Username + "'"
         " and upper(userlist) like '%ROLE=\"' || SYS.DBA_ROLE_PRIVS.GRANTED_ROLE || '\"%'"
         " ) where N=1"
@@ -399,7 +424,7 @@ String TForm1::GetValueFromSQL(String SQLText, String dbindex)
 
 /* Разбирает xml-текст из поля userparams
    Формирует обьект типа TParamRecord
-   Добавляет объект в ListParams переданного в параметрах TQueryItem* queryitem
+   Добавляет объект TParamRecord в ListParams переданного параметрах TQueryItem* queryitem
  */
 void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
 {
@@ -428,15 +453,9 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
         TParamRecord* param = TParamRecord::createParameter(msxml, node);
         params->push_back(param);
 
-
-        param->visibleflg = true;
-
-
-
+        //param->visibleflg = true;
         node = msxml.GetNextNode(node);
     }
-
-
 }
 
 
@@ -865,52 +884,49 @@ void __fastcall TForm1::ActionExportDbfFileExecute(TObject *Sender)
     Run(EM_DBASE4_FILE);
 }
 
-
-/*
+/* Реакция при закрытии формы
  */
 void __fastcall TForm1::FormClose(TObject *Sender, TCloseAction &Action)
 {
     QueryList.clear();
     TabList.clear();
-    DangerWords.clear();
+    dangerWords.clear();
 }
 
-/*
+/* Тестирование параметров на наличие опасных (запрещенных) значений
+ */
+bool TForm1::TestParameters(const QueryVariables* queryParams)
+{
+   for(QueryVariables::const_iterator variable = queryParams->begin(); variable != queryParams->end(); variable++)
+   {
+        for (std::vector<String>::iterator injection = dangerWords.begin(); injection != dangerWords.end(); injection++ ) {
+            if ( (*variable)->getType() == "string" && (*variable)->getValue().Pos( (*injection) ) )
+            {
+                return false;   // test failed
+            }
+        }
+   }
+   return true; // test passed
+}
+
+/* Обрабатывает в тексте sql-запроса блоки заключенные в / * * ... * * /
+  Заменяет параметры в строке на значения
+  Удаляет / * * и * * /
+  Собирает строку запроса
  */
 String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 {
     DinamicControlExit(NULL);
-    //ShowMessage(Parameters[SelIndex][0].value.c_str());		// Удаляем побелы
 
-    // Функция получения текста запроса
-    // Заменяет параметры в строке на значения
-    // Удаляет /** и **/
-    // Собирает строку запроса
-    // Обрабатываем строку вручную
-
-    TParamRecord *params;
-    //QueryVariables &queryParams = *params;
-
-    int nDangerWords = DangerWords.size();
+    int nDangerWords = dangerWords.size();
 
     // Защита от Иньекций  (обработка параметров)
     // перенести в отдельную функцию!!!
 
-
-    if ( queryParams != NULL ) {
-        for (unsigned int j = 0; j < (*queryParams).size(); j ++) {   // Убираем из парамтров все лишнее
-            for (int i = 0; i < nDangerWords; i++)
-            {
-                //int k = Parameters[SelIndex][j].value.Pos(DangerWords[i]);
-                //AnsiString s = CurrentQueryItem->Parameters[j].value;
-                if ( (*queryParams)[j]->value.Pos(DangerWords[i]) != 0) {
-                    (*queryParams)[j]->value = "";
-                    break;
-                }
-            }
-        }
+    // Эту проверку перенести только на выполнение.!!!!!!!!!!!!!!!!!!!!! 2016-19-09
+    if ( queryParams!= NULL && !TestParameters(queryParams) ) {
+        return "SQL text contents injections.";
     }
-
 
     // Готовим запрос (заменяем параметры на значения)
 	std::vector<EXPLODESTRING> sqlstring;
@@ -923,28 +939,37 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 
             TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
             item->text = StringReplace(item->text, "/**", "", replaceflags);
- 			item->text = StringReplace(item->text, "**/", "", replaceflags);     // Удаляем **/
+ 			item->text = StringReplace(item->text, "**/", "", replaceflags);     // Удаляем **_/
 
-            ParameterizedText paramText(item->text);
-            paramText.replaceVariables(systemVariables);
-            item->text = paramText.getText();
-
-
-            // Подстановка переменных среды
-            /*for (EnvVariables::const_iterator it = envVariables.begin(); it != envVariables.end(); it ++)
-            {
-                item->text = StringReplace(item->text, it->first, it->second, replaceflags);
-            }*/
-
-            // Подстановка переменных - параметров
-            //item->text = item->text.LowerCase();  // 2016-07-06
-            //bool bParamFined = false;
-
+            // Подстановка переменных
+            item->text = calculateValue(item->text);
 
 
             // Если заданы параметры пользователя
             if ( queryParams != NULL ) {
-                for (QueryVariables::size_type j = 0; j < (*queryParams).size(); j++) {   //Заменяем --Параметр на Значение
+
+
+                for (QueryVariables::iterator it = (*queryParams).begin(); it != (*queryParams).end(); it++)
+                {   //Заменяем --Параметр на Значение
+                    TParamRecord *param =(*it);
+                    String paramName = param->getName();
+                    String paramValue = param->getValue();
+
+                    if ( paramName != "" && item->text.Pos(":" + paramName) > 0 )
+                    {
+                        if ( param->isDeleted() )
+                        {
+                            item->text = "";    // Удалям блок /_** **_/  целиком
+                        }
+                        else
+                        {
+ 			                item->text = StringReplace(item->text, ":" + paramName, paramValue, replaceflags);
+                        }
+                    }
+                    //else  item->text = "";
+                }
+
+                /*for (QueryVariables::size_type j = 0; j < (*queryParams).size(); j++) {   //Заменяем --Параметр на Значение
                     TParamRecord *param;
                     param = (*queryParams)[j];
 
@@ -955,15 +980,17 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
                         //bParamFined = true;
                         if (param->deleteifflg == true && param->value.UpperCase() == param->deleteifvalue.UpperCase())
                         {
-                            item->text = "";
+                            item->text = "";    // Удалям блок целиком
                         }
                         else
                         {
- 			                item->text = StringReplace(item->text, ":"+param->name, param->value, replaceflags);     // Удаляем **/
+ 			                item->text = StringReplace(item->text, ":"+param->name, param->value, replaceflags);     // Удаляем * * /
                         }
                     }
-                    //else  item->text = "";  
-                }
+                    //else  item->text = "";
+                }*/
+
+
             }
 
               /*if (!bParamFined)   // Удаляем строку с параметром, если отсутствуют подходящие параметры в списке
@@ -974,11 +1001,11 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
     AnsiString result = Implode(sqlstring, "");
 
     // Защита от Иньекций  (обработка запроса в целом)
-    for (int i = 0; i < nDangerWords; i++)
-        if (result.Pos(DangerWords[i]) != 0) {
+    /*for (int i = 0; i < nDangerWords; i++)
+        if (result.Pos(dangerWords[i]) != 0) {
             result = "";
             break;
-        }
+        } */
 
     return result;  // Собираем вектор в строку и возращаем результат
 }
@@ -1417,15 +1444,11 @@ void TForm1::FillParametersLV()
     ParamsLV->Items->Clear();
 
 
-
-
-
-
 	for (unsigned int i = 0; i < CurrentQueryItem->UserParams.size(); i++)
     {
         TParamRecord *record = CurrentQueryItem->UserParams[i];
 
-        if (!record->visibleflg) {
+        if ( !record->isVisible() ) {
             continue;
         }
 
@@ -1434,8 +1457,8 @@ void TForm1::FillParametersLV()
         }       */
 
         TListItem *Item = ParamsLV->Items->Add();
-        Item->Caption = record->label.c_str();
-        Item->SubItems->Add(record->display.c_str());
+        Item->Caption = record->getCaption();
+        Item->SubItems->Add(record->getDisplay());
     }
     ParamsLV->Items->EndUpdate();
 
@@ -1655,22 +1678,11 @@ void __fastcall TForm1::Timer1Timer(TObject *Sender)
     Application->ProcessMessages();
 }
 
-//---------------------------------------------------------------------------
-// Прячет динамический элемент управления для редактирования параметра
+/* Прячет элемент управления для редактирования параметра
+   Устанавливает введеное пользователем значение
+*/
 void __fastcall TForm1::DinamicControlExit(TObject *Sender)
 {
-
-
-
-
-
-
-
-
-
-
-
-
     if (Sender != NULL)
     {
         TControl *Control = (TControl*)Sender;
@@ -1679,70 +1691,27 @@ void __fastcall TForm1::DinamicControlExit(TObject *Sender)
         if (param->type == "list")
         {
             TComboBox *ComboBox = (TComboBox*)Sender;
-            param->display = ComboBox->Text;
             if (ComboBox->ItemIndex >=0) {
-
-                //for(param->listitem)
-                int n = 0;
-                int i = 0;  // Индекс элемента в векторе
-                for (i = 0; i < ((TListParameter*)param)->listitem.size(); i++) { // пропуск скрытых элементов (visibleflg = false)
-                    //param->listitem[i];
-                    if (!((TListParameter*)param)->listitem[i].visibleflg)
-                        continue;
-                    if (n == ComboBox->ItemIndex) {
-                        break;
-                    }
-                    n++;
-                }
-                if (((TListParameter*)param)->listitem[i].value != "")
-                {
-                    param->value = ((TListParameter*)param)->listitem[i].value;
-                }
-                else
-                {
-                    param->value = IntToStr(ComboBox->ItemIndex);
-                }
-
+                param->setValue(ComboBox->ItemIndex);
             }
-            /*// Тест - зависимые параметры - свойство parent
-            int n = CurrentQueryItem->UserParams.size();
-            for (int i = 0; i < n; i++) {
-                TParamRecord *p = &CurrentQueryItem->UserParams[i];
-                if (p->parent != "") {
-                    if (param->name == p->parent) {
-                        p->value = param->value;
-                        //p->display = p->listitem;
-                        //p->display = param->display;
-                        UpdateParametersLV();
-                    }
-                    //p->parent = p->parent;
-                }
-            }   */
         }
         else if (param->type == "date")
         {
             TDateTimePicker* DateTimePicker = (TDateTimePicker*)Sender;
-            param->display = DateToStr(DateTimePicker->DateTime);
-            if (param->format == "")
-                param->value = param->display;
-            else
-                param->value = FormatDateTime(param->format, DateTimePicker->DateTime);
+            param->setValue(DateTimePicker->DateTime);
         } else if (param->type == "string") {
-            if (((TStringParameter*)param)->mask == "") {
-                TEdit* EditBox = (TEdit*)Sender;
-                param->display = EditBox->Text;
-            } else {
-                TMaskEdit* EditBox = (TMaskEdit*)Sender;
-                param->display = EditBox->Text;
+            String text = "";
+             try {
+                text = dynamic_cast<TEdit*>(Sender)->Text;
+             } catch (...) {
+                text = dynamic_cast<TMaskEdit*>(Sender)->Text;
              }
-             param->value = param->display;
+             param->setValue(text);
         } else if (param->type == "integer" || param->type == "float" ) {
-            //TNumEdit* EditBox = (TNumEdit*)Sender;
-            param->display = NumEdit1->Text;
-            param->value = param->display;
+            param->setValue(NumEdit1->Text);
         }
 
-        ParamsLV->Items->Item[ParamsLV->Tag]->SubItems->Strings[0] = param->display;
+        ParamsLV->Items->Item[ParamsLV->Tag]->SubItems->Strings[0] = param->getDisplay();
     } else {
         DateTimePicker1->Visible = false;
         Edit1->Visible = false;
@@ -1752,8 +1721,8 @@ void __fastcall TForm1::DinamicControlExit(TObject *Sender)
     }
 }
 
-//---------------------------------------------------------------------------
-// Обрабатывает сообщение KeyDown от динамических полей редактирования параметров
+/* Обрабатывает сообщение KeyDown от динамических полей редактирования параметров
+ */
 void __fastcall TForm1::DinamicControlOnKeyDown(TObject *Sender, WORD &Key,
       TShiftState Shift)
 {
@@ -1764,7 +1733,6 @@ void __fastcall TForm1::DinamicControlOnKeyDown(TObject *Sender, WORD &Key,
         DinamicControlExit(Sender);
     } 
 }
-
 
 /*
 void TParamRecordCtrl::Show(TParamRecordCtrl *paramRecord)
@@ -1779,20 +1747,25 @@ void TParamRecordCtrl:: SetType(String Type)
 
 }*/
 
+/*void TForm1::ShowDateTimePicker(TParamRecord* param)
+{
+} */
 
-//---------------------------------------------------------------------------
-// Начало редактирования значения параметра
+/* Начало редактирования значения параметра
+ */
 void __fastcall TForm1::OnEditParam()
 {
     if (ParamsLV->Selected == NULL)
+    {
         return;
+    }
 
     TRect rect = ParamsLV->Items->Item[0]->DisplayRect(drLabel);
 
     int top = ParamsLV->Selected->Top;
     int left = ParamsLV->Columns->Items[0]->Width+1;
     int width =  ParamsLV->Columns->Items[1]->Width;
-    int height = rect.Height();//.Bottom - rect.Top;
+    int height = rect.Height();
 
     // Определяем индекс параметра с учетом флага visible
     int LV_itemindex = ParamsLV->Selected->Index;  // Индекс элемента в ParamsLV
@@ -1802,8 +1775,10 @@ void __fastcall TForm1::OnEditParam()
     int paramitem_index = 0;  // Индекс элемента в векторе параметров CurrentQueryItem->Parameters
     for (paramitem_index = 0; paramitem_index < CurrentQueryItem->UserParams.size(); paramitem_index++) {
         TParamRecord *param = CurrentQueryItem->UserParams[paramitem_index];
-        if (!param->visibleflg) // пропуск скрытых элементов (visibleflg = false)
+
+        if ( !param->isVisible() ) { // пропуск скрытых элементов (visibleflg = false)
             continue;
+        }
         if (n == LV_itemindex) {
             break;
         }
@@ -1812,6 +1787,10 @@ void __fastcall TForm1::OnEditParam()
 
     TParamRecord *param;
     param = CurrentQueryItem->UserParams[paramitem_index];
+    //param->show();
+
+
+
 
     //TWinControl *Control;
 
@@ -1833,7 +1812,7 @@ void __fastcall TForm1::OnEditParam()
         DateTimePicker1->Tag = paramitem_index;  // Текущий выделенный элемент в векторе
 
         try {
-            DateTimePicker1->Date = StrToDate(param->display);
+            DateTimePicker1->Date = StrToDate(param->getDisplay());
         } catch (...) {
             DateTimePicker1->Date = Now();
         }
@@ -1858,9 +1837,10 @@ void __fastcall TForm1::OnEditParam()
         {
             TParamlistItem item = ((TListParameter*)param)->listitem[i];
 
-            ParameterizedText paramText(item.visibleif);
-            paramText.replaceVariables(systemVariables);
-            String condition = paramText.getText();
+            //ParameterizedText paramText(item.visibleif);
+            //paramText.replaceVariables(systemVariables);
+            //String condition = paramText.getText();
+            String condition = calculateValue(item.visibleif);
 
             if (item.visibleif != "" && condition != "true")
             {
@@ -1869,19 +1849,20 @@ void __fastcall TForm1::OnEditParam()
             }
 
             ComboBox1->Items->Add(item.label);
-            if (item.label == param->display)
+            if (item.label == param->getDisplay())
             {
                 ComboBox1->ItemIndex = cur_item;
             }
             cur_item++;
         }
-        ComboBox1->Text = param->display;
+        ComboBox1->Text = param->getDisplay();
         ComboBox1->Visible = true;
         ComboBox1->SetFocus();
 
         //CurrentDinamicControl = ComboBox1;
     } else if (param->type == "string" /* || param->type == "integer" || param->type == "float"*/) {
-        if ( ((TStringParameter*)param)->mask == "" )
+
+        if (  static_cast<TStringParameter*>(param)->mask == "" )
         {
             //TEdit* EditBox = new TEdit(this);
             Edit1->Parent = ParamsLV;
@@ -1892,7 +1873,7 @@ void __fastcall TForm1::OnEditParam()
             Edit1->Font = ParamsLV->Font;
             Edit1->Font->Size = 10;
             Edit1->Tag = paramitem_index;
-            Edit1->Text = param->display;
+            Edit1->Text = param->getDisplay();
             Edit1->Visible = true;
             Edit1->SetFocus();
         }
@@ -1907,7 +1888,7 @@ void __fastcall TForm1::OnEditParam()
             MaskEdit1->Font = ParamsLV->Font;
             MaskEdit1->Font->Size = 10;
             MaskEdit1->Tag = paramitem_index;
-            MaskEdit1->Text = param->display;
+            MaskEdit1->Text = param->getDisplay();
             MaskEdit1->Visible = true;
             MaskEdit1->SetFocus();
         }
@@ -1918,13 +1899,13 @@ void __fastcall TForm1::OnEditParam()
         NumEdit_bUseDot = param->type == "float";
         NumEdit1->Parent = ParamsLV;
         NumEdit1->Width = width;
-        NumEdit1->Top=top;
-        NumEdit1->Left=left;
-        NumEdit1->Height=height-2;
+        NumEdit1->Top = top;
+        NumEdit1->Left = left;
+        NumEdit1->Height = height-2;
         NumEdit1->Font = ParamsLV->Font;
         NumEdit1->Font->Size = 10;
         NumEdit1->Tag = paramitem_index;
-        NumEdit1->Text = param->display;
+        NumEdit1->Text = param->getDisplay();
         NumEdit1->Visible = true;
         NumEdit1->SetFocus();
     };
@@ -2061,7 +2042,7 @@ void __fastcall TForm1::ActionShowHelpExecute(TObject *Sender)
     "</parameter>\n"
     "</parameters>\n";
 
-    MessageBoxInf(str);
+    MessageBoxInf(str, "Справка SQL2Excel");
 
 }
 //---------------------------------------------------------------------------
@@ -2299,5 +2280,15 @@ void __fastcall TForm1::ActionApplictionExitExecute(TObject *Sender)
     //}
 }
 
+/* Выводит список переменных среды
+*/
+void __fastcall TForm1::ActionShowEnvironmentExecute(TObject *Sender)
+{
+    AnsiString str;
+    str += "Переменные среды:\n";
+    str += systemVariables.getVariables();
+
+    MessageBoxInf(str, "Список переменных среды SQL2Excel");
+}
 //---------------------------------------------------------------------------
 

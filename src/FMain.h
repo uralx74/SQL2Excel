@@ -39,95 +39,20 @@
 #include "parameter.h"
 #include "variables.h"
 #include "ParameterizedText.h"
+#include "Datatype.h"
+#include "ThreadSelect.h"
 
-
-
-// Режим экспорта данных
-typedef enum _EXPORTMODE {
-    EM_UNDEFINITE = 0,
-    EM_PROCEDURE,   // Выполнить как процедуру
-    EM_EXCEL_BLANK,     // Экспорт в пустой файл MS Excel
-    EM_EXCEL_TEMPLATE,  // Экспорт в шаблон MS Excel
-    EM_DBASE4_FILE,     // Экспорт в DBF
-    EM_WORD_TEMPLATE    // Экспорт в шаблон MS Word
-} EXPORTMODE;
-
-
-
-
-/*
-class TParamRecordCtrl : public TParamRecord
+class LvParameter: public Parameter
 {
 public:
-    void Show(TParamRecordCtrl *paramRecord);
-    //void SetType(String Type);
-    TObject* Control;
-}; */
+    show();
+};
 
-// Структура для хранения параметров поля (столбца) DBASE
-typedef struct {    // Для описания структуры dbf-файла
-    String type;    // Тип fieldtype is a single character [C,D,F,L,M,N]
-    String name;    // Имя поля (до 10 символов).
-    int length;         // Длина поля
-    int decimals;       // Длина десятичной части
-    // Character 	 1-255
-    // Date	  8
-    // Logical	  1
-    // Memo	  10
-    // Numeric	1-30
-    // Decimals is 0 for non-numeric, number of decimals for numeric.
-} DBASEFIELD;
-
-// Структура для хранения параметров поля (столбца) MS Excel
-typedef struct {    // Для описания формата ячеек в Excel
-    AnsiString format;      // Формат ячейки в Excel
-    AnsiString name;        // Имя поля
-    //int title_rows;       // Высота заголовка в строках
-    int width;              // Ширина столбца
-    int bwraptext;          // Флаг перенос по словам
-} EXCELFIELD;
-
-// Структура для хранения параметров экспорта в MS Excel
-typedef struct {
-    AnsiString id;
-    AnsiString label;
-    //bool fDefault;
-    AnsiString template_name;       // Имя файла шаблона Excel
-    AnsiString title_label;         // Строка - выводимая в качестве заголовка в отчете Excel (перенести в отдельную структуру)
-    int title_height;               // Высота заголовка в строках  (перенести в отдельную структуру)
-    std::vector<EXCELFIELD> Fields;     // Список полей для экспорта в файл MS Excel
-    AnsiString table_range_name;        // Имя диапазона табличной части (при выводе в шаблон)
-    bool fUnbounded;                    // Флаг того, что диапазон table_range_name будет увеличен, в соответствии с количеством записей в источнике данных
-} EXPORT_PARAMS_EXCEL;
-
-// Структура для хранения параметров экспорта в MS Word
-typedef struct {
-    AnsiString id;
-    AnsiString label;
-    //bool fDefault;
-    AnsiString template_name;   // Имя файла шаблона MS Word
-    int page_per_doc;           // Количество страниц на документ MS Word
-    AnsiString filter_main_field;      // Имя поля из основного запроса для сравнения со значением поля word_filter_sec_field
-    AnsiString filter_sec_field;       // Имя поля из вспомогательного запроса (см. word_filter_main_field)
-    AnsiString filter_infix_sec_field; // Имя поля из вспомогательного запроса, значение которого будет присоединено к имени результирующего файла
-} EXPORT_PARAMS_WORD;
-
-// Структура для хранения параметров режима экспорта - Выполнить
-typedef struct {
-    AnsiString id;
-} EXPORT_PARAMS_EXECUTE;
-
-// Структура для хранения параметров экспорта в DBF
-typedef struct {    // Для описания формата ячеек в Excel
-    AnsiString id;
-    AnsiString label;
-    //bool fDefault;
-    bool fAllowUnassignedFields;
-    std::vector<DBASEFIELD> Fields;    // Список полей для экспрта в файл DBF
-} EXPORT_PARAMS_DBASE;
-
+Variables systemVariables;         // Переменные системные
+Variables systemFunctions;         // Переменные системные
 
 typedef std::vector<TParamRecord*> QueryVariables;
+typedef std::vector<TParamRecord*>::iterator QueryVariablesIterator;
 
 // Структура для сохранения Запроса и параметров к нему
 class TQueryItem {
@@ -156,12 +81,6 @@ public:
     EXPORT_PARAMS_WORD param_word;
     EXPORT_PARAMS_EXECUTE param_execute;
 
-
-
-
-    //Variables customVariables;         // Переменные настраиваемые
-    //Variables systemVariables;         // Переменные системные
-
     QueryVariables UserParams;    // Задаваемые параметры к запрос
 
     bool fExcelFile;      // Флаг Excel в память
@@ -170,14 +89,6 @@ public:
     bool fDbfFile;       // Флаг Dbf в файл
 };
 
-/*
-class TQueryItemCtrl : public TQueryItem
-{
-public:
-    TObject* Control;
-};   */
-
-#include "ThreadSelect.h"
 
 typedef std::vector<TQueryItem*> QueryItemList;
 
@@ -186,8 +97,6 @@ public:
     AnsiString name;
     QueryItemList queryitem;
 };
-
-
 
 //---------------------------------------------------------------------------
 class TForm1 : public TForm
@@ -248,6 +157,7 @@ __published:	// IDE-managed Components
     TMenuItem *N9;
     TAction *ActionAsProcedure;
     TAction *ActionApplictionExit;
+    TAction *ActionShowEnvironment;
 	void __fastcall FormCreate(TObject *Sender);
 	void __fastcall FormClose(TObject *Sender, TCloseAction &Action);
     void __fastcall ListBox1DrawItem(TWinControl *Control, int Index,
@@ -283,7 +193,12 @@ __published:	// IDE-managed Components
     void __fastcall ActionExportExcelBlankExecute(TObject *Sender);
     void __fastcall ActionAsProcedureExecute(TObject *Sender);
     void __fastcall ActionApplictionExitExecute(TObject *Sender);
+    void __fastcall ActionShowEnvironmentExecute(TObject *Sender);
 private:	// User declarations
+
+    //void showListEditor(const TParamRecord& param);
+
+
     void __fastcall OnEditParam();
     int __fastcall LoadQueryList();
     bool __fastcall Auth();         // Авторизация
@@ -297,6 +212,7 @@ private:	// User declarations
     String GetValueFromSQL(String SQLText, String dbindex);
 
     String GetSQL(const String& SQLText, QueryVariables* queryParams = NULL) const;   // Составление строки запроса с подстановкой значений и т.д. для выполнения
+    bool TestParameters(const QueryVariables* queryParams);
 
     String __fastcall GetValue(String value);
    // AnsiString GetDefinedValue(AnsiString value);       // Оставлено для совместимости. В последущем полностью заменить GetValue
@@ -323,12 +239,12 @@ private:	// User declarations
     TObject *CurrentDinamicControl;    // Элемент управления для редактирования значения в списке параметров отображаемый в настоящее время
     TQueryItem* CurrentQueryItem; 	    // Текущий выбранный запрос
 
-    std::vector<String> DangerWords;    // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
+    std::vector<String> dangerWords;    // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
     std::vector<TTabItem> TabList;       // Вектор разделов
     std::vector<TQueryItem> QueryList;   // Вектор строк заросов
 
 
-    std::vector<String> m_env_func;     // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
+    //std::vector<String> m_env_func;     // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
 
     std::vector<TColor> m_vTabColor;  // Вектор цветов вкладок
     unsigned int m_ColorIndex;
@@ -342,7 +258,14 @@ private:	// User declarations
     std::map<String, TObject*> paramControls;
 
 
-    Variables systemVariables;         // Переменные системные
+
+
+
+
+
+
+
+
 
     //Variables customVariables;         // Переменные настраиваемые
 
@@ -353,6 +276,9 @@ private:	// User declarations
 public:
 	__fastcall TForm1(TComponent* Owner);
     __fastcall ~TForm1();
+
+
+
 
 
 

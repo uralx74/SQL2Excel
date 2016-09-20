@@ -1,4 +1,9 @@
-//---------------------------------------------------------------------------
+/* ParameterizedText.h
+   Класс для работы с параметризованным текстом.
+
+   Автор: vsovchinnikov
+   Дата создания: 2016-09-12
+ */
 
 #ifndef ParameterizedTextH
 #define ParameterizedTextH
@@ -20,8 +25,6 @@ private:
     String _sourceText;
     String _text;
     TReplaceFlags replaceflags;
-
-
 };
 
 

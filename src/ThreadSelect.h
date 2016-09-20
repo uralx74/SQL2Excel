@@ -8,6 +8,7 @@
 #include "OraDataTypeMap.hpp"
 
 #include "Halcn6DB.hpp"
+#include "Datatype.h"
 
 //typedef enum _EXPORTMODE{AS_PROCEDURE = 0, TO_EXCEL_FILE, TO_EXCEL_MEMORY, TO_DBASE4_FILE, AS_PROCEDURE, TO_WORD_FILE, TO_WORD_MEMORY} EXPORTMODE;
 
@@ -36,6 +37,21 @@ typedef enum _TThreadStatus {
 
 //class TLogger;  // опережающее объ€вление
 
+
+// –ежим экспорта данных
+typedef enum _EXPORTMODE {
+    EM_UNDEFINITE = 0,
+    EM_PROCEDURE,   // ¬ыполнить как процедуру
+    EM_EXCEL_BLANK,     // Ёкспорт в пустой файл MS Excel
+    EM_EXCEL_TEMPLATE,  // Ёкспорт в шаблон MS Excel
+    EM_DBASE4_FILE,     // Ёкспорт в DBF
+    EM_WORD_TEMPLATE    // Ёкспорт в шаблон MS Word
+} EXPORTMODE;
+
+
+
+class TQueryItem;
+
 typedef struct {
     AnsiString dstfilename;
     EXPORTMODE exportmode;
@@ -48,6 +64,7 @@ typedef struct {
     TOraSession* TemplateOraSession2;
 
 } THREADOPTIONS;
+
 
 //---------------------------------------------------------------------------
 class ThreadSelect : public TThread

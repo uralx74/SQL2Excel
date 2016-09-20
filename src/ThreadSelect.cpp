@@ -665,18 +665,22 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
         int param_count = UserParams.size();  // Параметры отчета
         int visible_param_count = 0;
         for (int i=0; i <= param_count-1; i++) {    // Подсчитываем кол-во отображаемых параметров
-            if (UserParams[i]->visibleflg)
+            if ( UserParams[i]->isVisible() )
                 visible_param_count++;
         }
         if (param_count > 0) {    // Список параметров для вывода в Excel
             data_parameters = CreateVariantArray(visible_param_count, 1);
             for (int i=0; i <= param_count-1; i++) {
-                if (!UserParams[i]->visibleflg)
+                if ( !UserParams[i]->isVisible() ) {
                     continue;
-                if (UserParams[i]->type != "separator")
-                    data_parameters.PutElement(UserParams[i]->label + ": " + UserParams[i]->display, i+1, 1);
+                }
+                if (UserParams[i]->type != "separator") {
+                    data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
+                }
                 else
-                    data_parameters.PutElement("[" + UserParams[i]->label + "]", i+1, 1);
+                {
+                    data_parameters.PutElement("[" + UserParams[i]->getCaption() + "]", i+1, 1);
+                }
             }
         }
 
