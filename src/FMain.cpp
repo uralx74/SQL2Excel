@@ -1992,9 +1992,6 @@ void __fastcall TForm1::ParamsLVAdvancedCustomDraw(
             pCanvas->Font->Style = pCanvas->Font->Style >> fsBold;
         }
 
-
-
-
         //pCanvas->MoveTo(Rect.Left, Rect.Bottom);
         //pCanvas->LineTo(Rect.Right, Rect.Bottom);
     }
@@ -2002,6 +1999,7 @@ void __fastcall TForm1::ParamsLVAdvancedCustomDraw(
     pCanvas->Unlock();
 
 }
+
 //---------------------------------------------------------------------------
 // F1
 void __fastcall TForm1::ActionShowHelpExecute(TObject *Sender)

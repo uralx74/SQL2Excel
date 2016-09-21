@@ -87,36 +87,38 @@ void TStringParameter::setValue(const String& value)
 void TListParameter::setValue(int index)
 {
 
-    int n = 0;  // Индекс элемента в векторе
-    for(TListParameter::ListItemIterator it = listitem.begin(); it != listitem.end(); it++)
+    int n = 0;  // Индекс элемента в векторе не считая скрытые
+    int i = 0;  // индекс итерации (или элемента считая скрытые), а также
+    TParamlistItem* item = NULL;
+    for(TListParameter::ListItemIterator it = listitem.begin(); it != listitem.end(); it++, i++)
     {
         if (!it->visibleflg) {
             continue;
         }
         if (n == index) {
+            item = it;
+            break;
+        }
+        if (n > index) {
             break;
         }
         n++;
     }
 
+    if (item != NULL)
+    {
+        value = item->value;
+        result = item->result;
+        display = item->label;
 
-    if ( n <= listitem.size() )
-    {
-        value = listitem[n].value;
-        result = listitem[n].result;
-        display = listitem[n].label;
-    }
-    else if (listitem.size() > 0)
-    {
-        value = listitem[0].value;
-        result = listitem[0].result;
-        display = listitem[0].label;
-    }
-    else
-    {
-        value = "";
-        result = "";
-        display = "";
+    } else {
+        if (n > 0) {
+            setValue(0);
+        } else {
+            value = "";
+            result = "";
+            display = "";
+        }
     }
 }
 
