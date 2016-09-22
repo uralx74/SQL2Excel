@@ -29,7 +29,7 @@ USEFORM("FormWait.cpp", Form_Wait);
 USEFORM("FShowQuery.cpp", FormShowQuery);
 USEFORM("..\util\FormLogin\FormLogin.cpp", LoginForm);
 USEUNIT("..\util\MSExcelWorks.cpp");
-USEUNIT("..\util\MSXMLWorks.cpp");
+USEUNIT("..\util\OleXml.cpp");
 USEUNIT("..\util\MSWordWorks.cpp");
 USEUNIT("..\util\CommandLine.cpp");
 USEUNIT("Parameter.cpp");

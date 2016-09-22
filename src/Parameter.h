@@ -8,7 +8,7 @@
 
 #include <vector.h>
 #include "ParameterizedText.h"
-#include "..\util\MSXMLWorks.h"
+#include "..\util\OleXml.h"
 
 
 class ParamterEditor
@@ -38,7 +38,7 @@ public:
     typedef String (*CalculateFunction)(const String&);
     typedef void (*BeginEditFunction)(const TParamRecord&);
 
-    static TParamRecord* createParameter(const MsxmlWorks &xml, Variant node);
+    static TParamRecord* createParameter(const OleXml &xml, Variant node);
     static void setValueCalculator(const CalculateFunction &calculate);
 
     virtual ~TParamRecord() {};
@@ -79,7 +79,7 @@ protected:
 
 
 protected:
-    TParamRecord* createDefault(const MsxmlWorks &xml, Variant node);
+    TParamRecord* createDefault(const OleXml &xml, Variant node);
     String calculate(const String& expression);
 
 private:
@@ -94,16 +94,22 @@ typedef std::vector<TParamlistItem>::iterator ListItemIterator;
 public:
     virtual String getValue();
     virtual void setValue(int index);
-    TListParameter(const MsxmlWorks &xml, Variant node);
+    virtual void setValue(const String& value);
+    TStringList* getItems();
+    int getItemIndex();
+
+    TListParameter(const OleXml &xml, Variant node);
     std::vector <TParamlistItem> listitem;   // Список значений (для list и variables)
 private:
-    String result;  
+    //String result;
+    ListItemIterator _currentItem;
+    int _itemIndex;
 };
 
 class TStringParameter: public TParamRecord
 {
 public:
-    TStringParameter(const MsxmlWorks &xml, Variant node);
+    TStringParameter(const OleXml &xml, Variant node);
     virtual void setValue(const String& value);
 
     AnsiString mask;    // Маска ввода
@@ -112,7 +118,7 @@ public:
 class TDateTimeParameter: public TParamRecord
 {
 public:
-    TDateTimeParameter(const MsxmlWorks &xml, Variant node);
+    TDateTimeParameter(const OleXml &xml, Variant node);
     virtual void setValue(const TDateTime& dt);
 
 private:
@@ -123,25 +129,25 @@ private:
 class TIntegerParameter: public TParamRecord
 {
 public:
-    TIntegerParameter(const MsxmlWorks &xml, Variant node);
+    TIntegerParameter(const OleXml &xml, Variant node);
 };
 
 class TSeparatorParameter: public TParamRecord
 {
 public:
-    TSeparatorParameter(const MsxmlWorks &xml, Variant node);
+    TSeparatorParameter(const OleXml &xml, Variant node);
 };
 
 class TFloatParameter: public TParamRecord
 {
 public:
-    TFloatParameter(const MsxmlWorks &xml, Variant node);
+    TFloatParameter(const OleXml &xml, Variant node);
 };
 
 class TVariableParameter: public TParamRecord
 {
 public:
-    TVariableParameter(const MsxmlWorks &xml, Variant node);
+    TVariableParameter(const OleXml &xml, Variant node);
 };
 
 

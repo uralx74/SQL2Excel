@@ -29,10 +29,6 @@ const String SYSTEM_VARIABLES_PREFIX = "$";
 const String CUSTOM_VARIABLES_PREFIX = "_";
 
 
-
-
-
-
 /* Сравнивает два значения
    2016-09-20 IS DEPRECATED!
 */
@@ -41,7 +37,7 @@ String function_compare(const std::vector<String>& parameters)
     if (parameters.size() != 2) {
         return "error";
     }
-    return parameters[0] == parameters[1]? "true" : "false";
+    return parameters[0] == parameters[1]? OleXml::TRUE_STR_VALUE : OleXml::FALSE_STR_VALUE;
 
 }
 
@@ -59,11 +55,11 @@ String function_in(const std::vector<String>& parameters)
     for (std::vector<String>::const_iterator it = parameters.begin()+1; it != parameters.end(); ++it)
     {
         if (parameters[0] == *it ) {
-            return "true";
+            return OleXml::TRUE_STR_VALUE;
         }
     }
 
-    return "false";
+    return OleXml::FALSE_STR_VALUE;
 }
 
 /* Вычисляет дату
@@ -432,7 +428,7 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
         return;
 
     // Формирование списка параметров
-    MsxmlWorks msxml;
+    OleXml msxml;
 
    	// Формируем список параметров
 	AnsiString xmlParams;
@@ -556,7 +552,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 
     try {
         String attribute;
-        MsxmlWorks msxml;
+        OleXml msxml;
         msxml.LoadXMLText(ParseStr);
 
         if (msxml.GetParseError() != "")
@@ -1515,7 +1511,7 @@ bool TForm1::CheckCondition(AnsiString condition)
 
     if (t.size() == 1) {
         t[0] = t[0].LowerCase();
-        if (t[0]=="true")
+        if ( t[0]== "true")
             return true;
         else
             return false;
@@ -1831,36 +1827,18 @@ void __fastcall TForm1::OnEditParam()
         ComboBox1->Font->Size = 10;
         ComboBox1->Tag = paramitem_index;  // Текущий выделенный элемент в векторе
 
-        ComboBox1->Clear();
-        int cur_item=0; // Текущий элемент. i-не подходит, так как добавляться могут не все элементы
-        for (int i=0; i < ((TListParameter*)param)->listitem.size();i++)
-        {
-            TParamlistItem item = ((TListParameter*)param)->listitem[i];
+        //ComboBox1->Clear();
 
-            //ParameterizedText paramText(item.visibleif);
-            //paramText.replaceVariables(systemVariables);
-            //String condition = paramText.getText();
-            String condition = calculateValue(item.visibleif);
+        TStringList* list = dynamic_cast<TListParameter*>(param)->getItems();
+        ComboBox1->Items->Assign(list);
+        list->Free();
+        ComboBox1->ItemIndex = dynamic_cast<TListParameter*>(param)->getItemIndex();
 
-            if (item.visibleif != "" && condition != "true")
-            {
-                //bool k = CheckCondition(item.visibleif);
-                continue;
-            }
 
-            ComboBox1->Items->Add(item.label);
-            if (item.label == param->getDisplay())
-            {
-                ComboBox1->ItemIndex = cur_item;
-            }
-            cur_item++;
-        }
-        ComboBox1->Text = param->getDisplay();
         ComboBox1->Visible = true;
         ComboBox1->SetFocus();
 
-        //CurrentDinamicControl = ComboBox1;
-    } else if (param->type == "string" /* || param->type == "integer" || param->type == "float"*/) {
+    } else if (param->type == "string") {
 
         if (  static_cast<TStringParameter*>(param)->mask == "" )
         {

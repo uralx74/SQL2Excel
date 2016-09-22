@@ -11,7 +11,7 @@
 #include "Ora.hpp"
 #include "..\MSExcelWorks.h"
 #include "..\MSWordWorks.h"
-#include "..\util\MSXMLWorks.h"
+#include "..\util\OleXml.h"
 #include "..\util\taskutils.h"
 #include "..\util\odacutils.h"
 #include "..\util\formlogin\formlogin.h"

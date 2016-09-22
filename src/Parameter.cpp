@@ -83,20 +83,21 @@ void TStringParameter::setValue(const String& value)
 }
 
 /* Устанавливает значение парамтера в соответствии с выбранным элементом из списка
+   Производит поиск элемента по индексу
  */
 void TListParameter::setValue(int index)
 {
 
     int n = 0;  // Индекс элемента в векторе не считая скрытые
     int i = 0;  // индекс итерации (или элемента считая скрытые), а также
-    TParamlistItem* item = NULL;
+    //TParamlistItem* item = NULL;
     for(TListParameter::ListItemIterator it = listitem.begin(); it != listitem.end(); it++, i++)
     {
         if (!it->visibleflg) {
             continue;
         }
         if (n == index) {
-            item = it;
+            _currentItem = it;
             break;
         }
         if (n > index) {
@@ -105,21 +106,78 @@ void TListParameter::setValue(int index)
         n++;
     }
 
-    if (item != NULL)
+    if (_currentItem != NULL)
     {
-        value = item->value;
-        result = item->result;
-        display = item->label;
+        value = _currentItem->value;
+        //result = _currentItem->result;
+        display = _currentItem->label;
+        _itemIndex = n;
+    } else {
+        if (n > 0) {
+            setValue(0);
+            _itemIndex = 0;
+        } else {
+            _currentItem = NULL;
+            _itemIndex = -1;
+            //value = "Ошибка";
+            //result = "Ошибка";
+            //display = "Ошибка";
+        }
+    }
+}
 
+/* Устанавливает значение парамтера в соответствии с выбранным элементом из списка
+   Производит поиск элемента по значению
+ */
+void TListParameter::setValue(const String& value)
+{
+    int n = 0;  // Индекс элемента в векторе не считая скрытые
+    int i = 0;  // индекс итерации (или элемента считая скрытые), а также
+   //TParamlistItem* item = NULL;
+    for(TListParameter::ListItemIterator it = listitem.begin(); it != listitem.end(); it++, i++)
+    {
+        if (!it->visibleflg) {
+            continue;
+        }
+        if (value == it->value) {
+            _currentItem = it;
+            //item = it;
+            break;
+        }
+        n++;
+    }
+
+    if (_currentItem != NULL)
+    {
+        this->value = _currentItem->value;
+        //result = _currentItem->result;
+        display = _currentItem->label;
+        _itemIndex = n;
     } else {
         if (n > 0) {
             setValue(0);
         } else {
-            value = "";
-            result = "";
-            display = "";
+            _currentItem = NULL;
+            _itemIndex = -1;
+            //value = "Ошибка";
+            //result = "Ошибка";
+            //display = "Ошибка";
         }
     }
+}
+
+/* Возвращает все видимые элементы списка
+ */
+TStringList* TListParameter::getItems()
+{
+    TStringList* strings = new TStringList();
+    for(TListParameter::ListItemIterator it = listitem.begin(); it != listitem.end(); it++)
+    {
+        if (it->visibleflg) {
+            strings->Add(it->label);
+        }
+    }
+    return strings;
 }
 
 
@@ -153,7 +211,7 @@ String TParamRecord::calculate(const String& expression)
 
 /* Создает конкретный вид параметра, в зависимости от типа указанного в xml
  */
-TParamRecord* TParamRecord::createParameter(const MsxmlWorks &xml, Variant node)
+TParamRecord* TParamRecord::createParameter(const OleXml &xml, Variant node)
 {
     TParamRecord* param;
     AnsiString type = LowerCase(xml.GetAttributeValue(node, "type"));
@@ -189,7 +247,7 @@ TParamRecord* TParamRecord::createParameter(const MsxmlWorks &xml, Variant node)
 
 /*
  */
-TParamRecord* TParamRecord::createDefault(const MsxmlWorks &xml, Variant node)
+TParamRecord* TParamRecord::createDefault(const OleXml &xml, Variant node)
 {
     type = LowerCase(xml.GetAttributeValue(node, "type"));
     name = xml.GetAttributeValue(node, "name");
@@ -242,19 +300,12 @@ TParamRecord* TParamRecord::createDefault(const MsxmlWorks &xml, Variant node)
     {
         deleteifflg = false;
     }
-
 }
 
-/* Создает параметр типа List
- */
-TListParameter::TListParameter(const MsxmlWorks &xml, Variant node)
-{
-    createDefault(xml, node);
-    Variant subnode = xml.GetFirstNode(node);
 
-    // Если в опциях list-a отсутствует параметр value
-    // то value будет равно первому значению из списка
-    bool bParamValueExist = !xml.GetAttribute(node, "value").IsEmpty();
+/*
+TSqlListParameter::TSqlListParameter()
+{
 
      /*if (src != "") {    // Если задан sql-запрос
 
@@ -296,85 +347,83 @@ TListParameter::TListParameter(const MsxmlWorks &xml, Variant node)
             delete OraQuery;
         } catch (...) {}
     } else {            // Если задан список значений
-    */
-        // Если в списке значений компонента list отсутствует параметр value
-        // то проставляем значение value для каждого item-a
-        bool bValueAutoInc = xml.GetAttribute(subnode, "value").IsEmpty();
-        int i = 0;
-        while (!subnode.IsEmpty()) {
-            TParamlistItem item;
-            item.value = bValueAutoInc? IntToStr(i++) : xml.GetAttributeValue(subnode, "value");
-            item.result = xml.GetAttributeValue(subnode, "result", item.value);
-            item.label = xml.GetAttributeValue(subnode, "label");
-            item.visible = Trim(LowerCase(xml.GetAttributeValue(subnode, "visible")));
+*/
+
+/* Создает параметр типа List
+ */
+TListParameter::TListParameter(const OleXml &xml, Variant node) :
+    _currentItem(NULL)
+{
+    createDefault(xml, node);
+    listitem.reserve(10);
+
+    Variant subnode = xml.GetFirstNode(node);
+
+    // Если в опциях list-a отсутствует параметр value
+    // то value будет равно первому значению из списка
+    bool bParamValueExist = !xml.GetAttribute(node, "value").IsEmpty();
+
+    // Если в списке значений компонента list отсутствует параметр value
+    // то проставляем значение value для каждого item-a
+    bool bValueAutoInc = xml.GetAttribute(subnode, "value").IsEmpty();
+    int i = 0;
+
+    // Заполняем список элементов
+    // в список попадают и невидимые (скрытые) элементы
+    while (!subnode.IsEmpty()) {
+        TParamlistItem item;
+        item.value = bValueAutoInc? IntToStr(i++) : xml.GetAttributeValue(subnode, "value");
+        item.result = xml.GetAttributeValue(subnode, "result", item.value);
+        item.label = xml.GetAttributeValue(subnode, "label", item.value);
+
+        if (xml.GetAttribute(subnode, "visible").IsEmpty() && !xml.GetAttribute(subnode, "visibleif").IsEmpty())
+        {
             item.visibleif = Trim(LowerCase(xml.GetAttributeValue(subnode, "visibleif")));
-
-
-            //visible = true;
-            // Проверяем условие видимости
-            // с учетом того, что значение visible приоритетнее условие visibleif
-            if (item.visible == "" && item.visibleif != "")
-            {
-                String condition = calculate(item.visibleif);
-
-                if (condition == "true")
-                {
-                    item.visibleflg = true;
-                }
-                else
-                {
-                    item.visibleflg = false;
-                }
-
-                //item.visibleflg = CheckCondition(condition);
-                //item.visibleflg = CheckCondition(item.visibleif);
-                //if (record->visibleif != "" && CheckCondition(record->visibleif) != true) {
-                //AnsiString s = "s";
-            }
-            else
-            {
-                if (item.visible == "false")
-                {  // visible имеет приоритет над visibleif
-                    item.visibleflg = false;
-                }
-                else
-                {
-                    item.visibleflg = true;
-                }
-            }
-
-            listitem.push_back(item);
-            subnode = xml.GetNextNode(subnode);
+            item.visibleflg = calculate(item.visibleif) ==  OleXml::TRUE_STR_VALUE;
+        } else {
+            item.visible = Trim(LowerCase(xml.GetAttributeValue(subnode, "visible", OleXml::TRUE_STR_VALUE)));
+            item.visibleflg = item.visible == OleXml::TRUE_STR_VALUE;
         }
 
-        // Задаем значение по умолчанию равным первому из списка
-        // но только если параметр param.value не задан явно
-        if (!bParamValueExist && value == "" && listitem.size() > 0)
-        {
-            value = listitem[0].value;
-        }
+        listitem.push_back(item);
+        subnode = xml.GetNextNode(subnode);
+    }
 
-
-    // Задаем отображение param.display в соответствии с param.value (выбираем из списка)
-    for (int j = 0; j < listitem.size(); j++)
+    // Задаем значение по умолчанию равным первому из списка
+    // но только если параметр param.value не задан явно
+    if ( bParamValueExist )
     {
-        if (value == listitem[j].value)
-        {
-            display = listitem[j].label;
-            break;
-        }
+        setValue(value);
+    }
+    else
+    {
+        setValue(0);
     }
 }
 
+/* Возвращает индекс элемента (скрытые пропускаются)
+ */
+int TListParameter::getItemIndex()
+{
+    return _itemIndex;
+}
+
+
 String TListParameter::getValue()
 {
-    //return value;
-    return result;
+    if (_currentItem != NULL)
+    {
+        return _currentItem->result;
+    }
+    else
+    {
+        return "";
+    }
 }
 
 /* Создает параметр типа String
  */
-TStringParameter::TStringParameter(const MsxmlWorks &xml, Variant node)
+TStringParameter::TStringParameter(const OleXml &xml, Variant node)
 {
     createDefault(xml, node);
     display = value;
@@ -383,7 +432,7 @@ TStringParameter::TStringParameter(const MsxmlWorks &xml, Variant node)
 
 /* Создает параметр типа Date
  */
-TDateTimeParameter::TDateTimeParameter(const MsxmlWorks &xml, Variant node)
+TDateTimeParameter::TDateTimeParameter(const OleXml &xml, Variant node)
 {
     createDefault(xml, node);
     format = xml.GetAttributeValue(node, "format");
@@ -410,7 +459,7 @@ TDateTimeParameter::TDateTimeParameter(const MsxmlWorks &xml, Variant node)
 
 /* Создает параметр типа Integer
  */
-TIntegerParameter::TIntegerParameter(const MsxmlWorks &xml, Variant node)
+TIntegerParameter::TIntegerParameter(const OleXml &xml, Variant node)
 {
     createDefault(xml, node);
     display = value;
@@ -418,14 +467,14 @@ TIntegerParameter::TIntegerParameter(const MsxmlWorks &xml, Variant node)
 
 /* Создает параметр типа Float
  */
-TFloatParameter::TFloatParameter(const MsxmlWorks &xml, Variant node)
+TFloatParameter::TFloatParameter(const OleXml &xml, Variant node)
 {
     display = value;
 }
 
 /* Создает параметр типа Separator
  */
-TSeparatorParameter::TSeparatorParameter(const MsxmlWorks &xml, Variant node)
+TSeparatorParameter::TSeparatorParameter(const OleXml &xml, Variant node)
 {
     createDefault(xml, node);
     //display = value;
@@ -433,7 +482,7 @@ TSeparatorParameter::TSeparatorParameter(const MsxmlWorks &xml, Variant node)
 
 /* Создает параметр типа Variable
  */
-TVariableParameter::TVariableParameter(const MsxmlWorks &xml, Variant node)
+TVariableParameter::TVariableParameter(const OleXml &xml, Variant node)
 {
     visibleflg = false;
 }
