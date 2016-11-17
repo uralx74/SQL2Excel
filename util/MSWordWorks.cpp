@@ -395,8 +395,9 @@ Variant __fastcall MSWordWorks::SetPictureToField(Variant Document, String Field
 
 //---------------------------------------------------------------------------
 // ѕоиск текста с заменой
-void __fastcall MSWordWorks::FindTextForReplace(String Text, String ReplaceText, bool fReg)
+void __fastcall MSWordWorks::FindTextForReplace(Variant document, String Text, String ReplaceText, bool fReg)
 {
+        document.OleProcedure("Activate");
         // ќпределение выбранного участка в документе
         //Variant Selection = Document.OlePropertyGet("Selection");
         Variant Selection = WordApp.OlePropertyGet("Selection");
@@ -697,6 +698,11 @@ Variant __fastcall MSWordWorks::MergeDocument(Variant TemplateDocument, MERGETAB
     Variant Document = MergeDocumentFromFile(TemplateDocument, TmpFileName, 1, PagesCount);
 
     //FindTextForReplace("#@#sep_", ""); // «акомментировано 2016-07-21
+    // «амен€ет разрыв раздела на разрыв страницы
+    // это необходимо, чтобы пользователи могли печатать диапазон страниц.
+    // »наче в документа получаетс€ множество листов и одна страница 
+    FindTextForReplace(Document, "^b", "^m");
+
     for (int i = 0; i < 5; i ++) {      // Delete temporary file
         if (remove(TmpFileName.c_str()) == 0)
             break;

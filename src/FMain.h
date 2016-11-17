@@ -7,10 +7,8 @@
 #include <StdCtrls.hpp>
 #include <Forms.hpp>
 #include <ComCtrls.hpp>
-#include "MemDS.hpp"
+//#include "MemDS.hpp"
 #include "Ora.hpp"
-#include "..\MSExcelWorks.h"
-#include "..\MSWordWorks.h"
 #include "..\util\OleXml.h"
 #include "..\util\taskutils.h"
 #include "..\util\odacutils.h"
@@ -31,7 +29,7 @@
 
 #include <ADODB.hpp>
 #include "VirtualTable.hpp"
-#include "Halcn6DB.hpp"
+//#include "Halcn6DB.hpp"
 #include <Dialogs.hpp>
 #include <ImgList.hpp>
 #include <Mask.hpp>
@@ -41,6 +39,10 @@
 #include "ParameterizedText.h"
 #include "Datatype.h"
 #include "ThreadSelect.h"
+#include "QueryItem.h"
+#include <DB.hpp>
+#include "MemDS.hpp"
+#include "EditAlt.h"
 
 class LvParameter: public Parameter
 {
@@ -50,45 +52,6 @@ public:
 
 Variables systemVariables;         // Переменные системные
 Variables systemFunctions;         // Переменные системные
-
-typedef std::vector<TParamRecord*> QueryVariables;
-typedef std::vector<TParamRecord*>::iterator QueryVariablesIterator;
-
-// Структура для сохранения Запроса и параметров к нему
-class TQueryItem {
-public:
-    AnsiString tabname;     // Наименование раздел
-    AnsiString taborder;    // Порядковый номер вкладки
-    AnsiString queryid;     // id запроса
-    AnsiString querytext;   // Текст запроса
-    AnsiString querytext2;  // Текст второго запроса (используется в отчетах в MS Word)
-    AnsiString queryname;   // Наименование запроса
-    AnsiString dbname;      // Индекс базы данных
-    AnsiString dbname2;     // Индекс базы данных для второго запроса (используется в отчетах в MS Word)
-    AnsiString sortorder;   // Порядок сортировки
-    AnsiString spr_task_sql2excel_id;
-    AnsiString fieldslist;  // Строка - перечень записей (комментарий к запросу)
-
-    EXPORTMODE DefaultExportType;   // Тип отчета для выгрузки "По умолчанию"
-    //int ExportFieldIndex;           // Индекс отчета для выгрузки;
-
-    AnsiString exportparam_id;
-
-
-    EXPORT_PARAMS_EXCEL param_excel;
-    EXPORT_PARAMS_DBASE param_dbase;
-    //std::vector<PARAM_EXCEL> param_excel;
-    EXPORT_PARAMS_WORD param_word;
-    EXPORT_PARAMS_EXECUTE param_execute;
-
-    QueryVariables UserParams;    // Задаваемые параметры к запрос
-
-    bool fExcelFile;      // Флаг Excel в память
-    //int fExcelFile;     // Флаг Excel в файл
-    bool fWordFile;     // Флаг Word
-    bool fDbfFile;       // Флаг Dbf в файл
-};
-
 
 typedef std::vector<TQueryItem*> QueryItemList;
 
@@ -158,6 +121,7 @@ __published:	// IDE-managed Components
     TAction *ActionAsProcedure;
     TAction *ActionApplictionExit;
     TAction *ActionShowEnvironment;
+        TConnectDialog *ConnectDialog1;
 	void __fastcall FormCreate(TObject *Sender);
 	void __fastcall FormClose(TObject *Sender, TCloseAction &Action);
     void __fastcall ListBox1DrawItem(TWinControl *Control, int Index,
@@ -196,6 +160,9 @@ __published:	// IDE-managed Components
     void __fastcall ActionShowEnvironmentExecute(TObject *Sender);
 private:	// User declarations
 
+    //void xx (const String& s, int a);
+    //void threadListener(const String& Message, int Status);
+
     //void showListEditor(const TParamRecord& param);
 
 
@@ -227,14 +194,11 @@ private:	// User declarations
     TColor __fastcall ColorByIndex(int index);     // Возвращает цвет по индексу
 
 
-    TOdacUtilLog* OdacLog;
     std::vector<TOraSession*> m_sessions;    // Вектор строк, которые нужно убрать из строки запроса (truncate, insert, update...)
 
-    ThreadSelect *ts;   // Поток формирования отчета
     bool bAdmin;            // Флаг, указывающий на то, что авторизовавшийся пользователь - администратор
     AnsiString AppPath;     // Путь к исполняемому файлу программы
     AnsiString Username;    // Имя пользователя, авторизованного в программе
-    double TotalTime;       // Таймер для посчета времени работы потока формирования отчета
     //double TerminateTime;   // Таймер для прерывания потока формирования отчета
     TObject *CurrentDinamicControl;    // Элемент управления для редактирования значения в списке параметров отображаемый в настоящее время
     TQueryItem* CurrentQueryItem; 	    // Текущий выбранный запрос
@@ -258,15 +222,6 @@ private:	// User declarations
     std::map<String, TObject*> paramControls;
 
 
-
-
-
-
-
-
-
-
-
     //Variables customVariables;         // Переменные настраиваемые
 
     void __fastcall AddSystemVariable(const String& name, const String& value);
@@ -274,15 +229,15 @@ private:	// User declarations
 
 
 public:
+    TOdacUtilLog* OdacLog;
+    double TotalTime;       // Таймер для посчета времени работы потока формирования отчета
+    ThreadSelect *ts;   // Поток формирования отчета
+
 	__fastcall TForm1(TComponent* Owner);
     __fastcall ~TForm1();
 
-
-
-
-
-
-    void __fastcall OnThread(int Status, AnsiString Message = "");
+    void __fastcall threadListener(int Status, std::vector<String> message);
+    //void __fastcall threadListener(int Status, AnsiString Message = "");
     void __fastcall OnThreadChangeStatus(int Status);
     void __fastcall OnThreadError(int Status);
     void __fastcall OnThreadSuccess(EXPORTMODE ExportMode, std::vector<String> vResultFiles);

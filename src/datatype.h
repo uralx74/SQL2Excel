@@ -1,6 +1,8 @@
 #ifndef DatatypeH
 #define DatatypeH
 
+#include <vector>
+
 // Структура для хранения параметров поля (столбца) DBASE
 typedef struct {    // Для описания структуры dbf-файла
     String type;    // Тип fieldtype is a single character [C,D,F,L,M,N]

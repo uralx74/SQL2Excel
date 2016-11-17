@@ -6,9 +6,16 @@
 #include <Classes.hpp>
 #include "Ora.hpp"
 #include "OraDataTypeMap.hpp"
+#include "math.h"
 
-#include "Halcn6DB.hpp"
-#include "Datatype.h"
+//#include "Halcn6DB.hpp"
+
+#include "QueryItem.h"
+#include "Parameter.h"
+#include "..\util\odacutils.h"
+#include "..\MSExcelWorks.h"
+#include "..\MSWordWorks.h"
+
 
 //typedef enum _EXPORTMODE{AS_PROCEDURE = 0, TO_EXCEL_FILE, TO_EXCEL_MEMORY, TO_DBASE4_FILE, AS_PROCEDURE, TO_WORD_FILE, TO_WORD_MEMORY} EXPORTMODE;
 
@@ -37,7 +44,7 @@ typedef enum _TThreadStatus {
 
 //class TLogger;  // опережающее объявление
 
-
+/*
 // Режим экспорта данных
 typedef enum _EXPORTMODE {
     EM_UNDEFINITE = 0,
@@ -47,8 +54,7 @@ typedef enum _EXPORTMODE {
     EM_DBASE4_FILE,     // Экспорт в DBF
     EM_WORD_TEMPLATE    // Экспорт в шаблон MS Word
 } EXPORTMODE;
-
-
+*/
 
 class TQueryItem;
 
@@ -70,11 +76,14 @@ typedef struct {
 class ThreadSelect : public TThread
 {
 public:
-    //enum EXPORTMODE {TO_EXCEL= 1, TO_DBASE4};
-    __fastcall ThreadSelect(bool CreateSuspended);
+    //__fastcall ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt, void (*f)(const String&, int));
+    __fastcall ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt);
+
     __fastcall ~ThreadSelect();
+
     TOraSession* __fastcall CreateOraSession(TOraSession* TemplateOraSession);
-    void SetThreadOpt(THREADOPTIONS* threadopt);
+
+
     void __fastcall SyncThreadDone();
     void __fastcall SyncThreadChangeStatus();
 
@@ -88,6 +97,8 @@ private:
     TOraSession* ThreadOraSession2; // Вторая сессия для второго запроса (используется в отчетах в MS Word)
     TOraQuery* OraQueryMain;
     TOraQuery* OraQuerySecondary;   // Второй запрос (используется в отчетах в MS Word)
+    static unsigned int _threadIndex;   // Счетчик потоков
+    int _threadId;  // Идентификатор потока
 
 
     AnsiString sQueryText;
@@ -100,12 +111,12 @@ private:
 
     std::vector<TParamRecord*> UserParams;    // Задаваемые параметры к запросу
 
-    TThreadStatus ThreadStatus;
-    AnsiString ThreadMessage;
+    TThreadStatus _threadStatus;
+    AnsiString _threadMessage;
 
     std::vector<String> vResultFiles;   // Список имен файлов - результатов
 
-protected:
+    void SetThreadOpt(THREADOPTIONS* threadopt);
     void __fastcall Execute();
     void __fastcall ExportToExcel(TOraQuery *OraQuery); // Заполнение отчета Excel
     void __fastcall ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields);
@@ -113,6 +124,7 @@ protected:
     void __fastcall ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields);  // Заполнение отчета Word на базе шаблона
 
 
+    void (*f)(const String&, int);
 
     //Variant ExportToExcelTable1(TOraQuery* QTable, Variant Worksheet, bool bUnbounded = true);   // Временно !!!!!!!!!!!
 

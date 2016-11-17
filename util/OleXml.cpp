@@ -177,7 +177,25 @@ Variant __fastcall OleXml::SelectSingleNode(Variant node, const AnsiString& xpat
  */
 Variant OleXml::GetAttribute(Variant node, const AnsiString& attributeName) const
 {
-    return node.OlePropertyGet("attributes").OleFunction("getNamedItem", attributeName);
+    // test
+    //int n = attributeName.Length() + 1;
+    // wchar_t* s = new wchar_t[n];
+    //StringToWideChar(attributeName, s, n);
+
+    //IXMLDOMNode* pIXMLDOMNode;
+
+    //IXMLDOMNamedNodeMap* attr;
+    //attr->getNamedItem()
+    //pIXMLDOMNode->get
+    //BSTR bstrAtrName = attributeName.WideChar();
+    //Variant a = node.OlePropertyGet("attributes");
+
+    //wstring s5(L"type");
+    //delete s;
+    //Variant result = a.OleFunction("getNamedItem", attributeName.c_str());
+
+
+    return node.OlePropertyGet("attributes").OleFunction("getNamedItem", attributeName.c_str());
     //return attribute.IsEmpty();
 }
 
@@ -209,11 +227,33 @@ AnsiString __fastcall OleXml::GetAttributeText(Variant node, const AnsiString& a
 /* Возвращает значение атрибута,
    если атрибут отсутствует, то возвращает значение DefaultValue
  */
-AnsiString __fastcall OleXml::GetAttributeValue(Variant node, const AnsiString& attributeName, const AnsiString& DefaultValue) const
+AnsiString __fastcall OleXml::GetAttributeValue(Variant node, const AnsiString& attributeName, AnsiString DefaultValue) const
 {
     Variant attribute = GetAttribute(node, attributeName);
-    return (attribute.IsEmpty()) ? DefaultValue : VarToStr( attribute.OlePropertyGet("text") );
+    return (VarIsClear(attribute)) ? DefaultValue : VarToStr( attribute.OlePropertyGet("text") );
 
+    /*if (attribute.IsEmpty()) {
+        DefaultValue = "";
+    }
+    if (attribute.IsNull()) {
+        DefaultValue = "";
+    }
+    VarCheckEmpty(attribute);
+    if (VarIsClear(attribute)) {
+        DefaultValue = "";
+    }
+    if (VarIsStr(attribute) ) {
+        DefaultValue = "";
+    }    */
+
+
+
+
+    // commented 2016-11-17
+    //return (attribute.IsEmpty()) ? DefaultValue : VarToStr( attribute.OlePropertyGet("text") );
+
+
+    
     /*
     AnsiString attribute = Trim( GetAttributeValue( Node, StringToOleStr(AttributeName) ) );
 
@@ -233,7 +273,16 @@ int __fastcall OleXml::GetAttributeValue(Variant node, const AnsiString& attribu
 {
 
     Variant attribute = GetAttribute(node, attributeName);
-    return (attribute.IsEmpty()) ? defaultValue : attribute.OlePropertyGet("Value");
+    try
+    {
+        // Закомментировано 2016-11-17
+        //return (attribute.IsEmpty()) ? defaultValue : attribute.OlePropertyGet("Value");
+        return (VarIsClear(attribute)) ? defaultValue : attribute.OlePropertyGet("Value");
+    }
+    catch (...)  // in case if attribute value is not integer value
+    {
+        return defaultValue;
+    }
 
 /*    AnsiString attribute = Trim(GetAttributeValue(Node, AttributeName));  // Ширина столбца
     if (attribute != "")
@@ -260,7 +309,8 @@ bool __fastcall OleXml::GetAttributeValue(Variant node, const AnsiString& attrib
 {
     Variant attribute = GetAttribute(node, attributeName);
 
-    if (attribute.IsEmpty()) {
+    //if (attribute.IsEmpty()) {
+    if ( VarIsClear(attribute) ) {
         return defaultValue;
     } else {
         String textValue = attribute.OlePropertyGet("Value");
@@ -292,6 +342,10 @@ AnsiString __fastcall OleXml::GetParseError() const
         return "";
     }
 }
+
+
+
+
 
 
 

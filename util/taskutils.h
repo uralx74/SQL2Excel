@@ -256,12 +256,14 @@ void PushBackNvl(vector<AnsiString> &v, AnsiString value)
 AnsiString Implode(const vector<EXPLODESTRING> &pieces, const AnsiString &glue = "")
 {
 	AnsiString a;
-	int leng=pieces.size();
- 	for(int i=0; i<leng; i++)
+	int leng = pieces.size();
+ 	for(int i=0; i < leng; i++)
  	{
  		a += pieces[i].text;
  		if (  i < (leng-1) )
+        {
  			a += glue;
+        }
  	}
  	return a;
 }
@@ -480,10 +482,11 @@ vector<EXPLODESTRING> ExplodeByBackslash(AnsiString str, AnsiString separatorsta
             item.fBacksleshed = false;
             result.push_back(item);
         }
-        found_end = PosEx(separatorend, str, found_start+seplength_start)+seplength_end;
+        // Позиция последнего копируемого символа
+        found_end = PosEx(separatorend, str, found_start+seplength_start) + seplength_end;
 
         // Фрагмент в скобках
-        item.text = str.SubString(found_start, found_end-found_start);
+        item.text = str.SubString(found_start, found_end - found_start);
         item.fBacksleshed = true;
 
         result.push_back(item);
@@ -492,8 +495,9 @@ vector<EXPLODESTRING> ExplodeByBackslash(AnsiString str, AnsiString separatorsta
  	}
 
     // Фрагмент за скобками в конце строки
- 	if(addEmpty && (found_end < str.Length())){
-        item.text = str.SubString(found_end, str.Length()-found_end+1);
+ 	if( addEmpty && (found_end <= str.Length()) )
+    {
+        item.text = str.SubString(found_end, str.Length() - found_end + 1);
         item.fBacksleshed = false;
  		result.push_back(item);
 	}

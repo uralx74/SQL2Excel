@@ -370,7 +370,10 @@ TListParameter::TListParameter(const OleXml &xml, Variant node) :
 
     // Заполняем список элементов
     // в список попадают и невидимые (скрытые) элементы
-    while (!subnode.IsEmpty()) {
+    // Закомментировано 2016-11-17
+    //while (!subnode.IsEmpty()) {
+    while ( !VarIsClear(subnode) )
+    {
         TParamlistItem item;
         item.value = bValueAutoInc? IntToStr(i++) : xml.GetAttributeValue(subnode, "value");
         item.result = xml.GetAttributeValue(subnode, "result", item.value);

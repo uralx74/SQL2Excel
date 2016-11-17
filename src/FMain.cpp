@@ -16,13 +16,13 @@ using namespace std;
 #pragma link "OdacVcl"
 #pragma link "DBAccess"
 #pragma link "DBAccess"
-#pragma link "Halcn6DB"
-#pragma link "NumEdit"
+#pragma link "MemDS"
+#pragma link "EditAlt"
 #pragma resource "*.dfm"
 TForm1 *Form1;
 const String TASKNAME = "SQL2EXCEL";
 
-const String mainSpr = "spr_task_sql2excel_t";
+const String mainSpr = "spr_task_sql2excel";
 const String envSpr = "spr_task_sql2excel_env";
 
 const String SYSTEM_VARIABLES_PREFIX = "$";
@@ -51,7 +51,6 @@ String function_in(const std::vector<String>& parameters)
         return "error";
     }
 
-    int k = 0;
     for (std::vector<String>::const_iterator it = parameters.begin()+1; it != parameters.end(); ++it)
     {
         if (parameters[0] == *it ) {
@@ -406,8 +405,6 @@ String TForm1::GetValueFromSQL(String SQLText, String dbindex)
 
         result = OraQuery->FieldByName("value")->AsString;
 
-        //result = OraQuery->FieldByIndex(0)->AsString;
-
         OraQuery->Close();
         delete OraQuery;
     } catch(...) {
@@ -425,7 +422,9 @@ String TForm1::GetValueFromSQL(String SQLText, String dbindex)
 void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
 {
     if (ParamStr == "")
+    {
         return;
+    }
 
     // Формирование списка параметров
     OleXml msxml;
@@ -444,94 +443,14 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
     Variant RootNode = msxml.GetRootNode();
     Variant node = msxml.GetFirstNode(RootNode);
 
-    while (!node.IsEmpty())
+    // Закомментировано 2016-11-17
+    //while (!node.IsEmpty())
+    while ( !VarIsClear(node) )
     {
         TParamRecord* param = TParamRecord::createParameter(msxml, node);
         params->push_back(param);
 
         //param->visibleflg = true;
-        node = msxml.GetNextNode(node);
-    }
-}
-
-
-
-
-
-
-/*
-        param.type = LowerCase(msxml.GetAttributeValue(node, "type"));
-        param.name = msxml.GetAttributeValue(node, "name");
-        param.label = msxml.GetAttributeValue(node, "label");
-        param.format = msxml.GetAttributeValue(node, "format");
-
-        param.src = msxml.GetAttributeValue(node, "src");
-        param.dbindex = msxml.GetAttributeValue(node, "dbindex");
-        param.visible = Trim(LowerCase(msxml.GetAttributeValue(node, "visible")));
-        param.visibleif = Trim(LowerCase(msxml.GetAttributeValue(node, "visibleif")));
-
-        // Тест!!!!!!!
-        param.parent = msxml.GetAttributeValue(node, "parent");
-
-        param.value_src = msxml.GetAttributeValue(node, "value");
-        param.value_src = ReplaceVariables(envVariables, param.value_src);
-
-        param.value = ReplaceVariables(queryitem->Variables, param.value_src);
-        param.value = GetDefinedValue(param.value);     // Доработать здесь!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-
-        // visibleif
-        if (param.visible == "" && param.visibleif != "") {  // visible имеет приоритет над visibleif
-
-            //String condition = ReplaceVariables(&m_env_var, param.visibleif);  // Подстановка предопределенных значений в среде
-
-            String condition = ReplaceVariables(envVariables, param.visibleif);  // Подстановка предопределенных значений в среде
-            condition = ReplaceVariables(queryitem->Variables, condition);  // Подстановка значений, определенных в QUERYITEM
-
-            if (GetDefinedValue(condition) == "true")
-                param.visibleflg = true;
-            else
-                param.visibleflg = false;
-        } else {
-            if (param.visible == "false")   // visible имеет приоритет над visibleif
-                param.visibleflg = false;
-            else
-                param.visibleflg = true;
-        }
-
-        // deleteif
-        if (!msxml.GetAttribute(node, "deleteif").IsEmpty()) {// Если в xml отсутствует параметр value
-            param.deleteifflg = true;
-            param.deleteifvalue = msxml.GetAttributeValue(node, "deleteif").UpperCase();
-        } else {
-            param.deleteifflg = false;
-        }
-
-        if (param.type == "variable" )  // Неотображаемое поле. Значение берется из запроса.
-                                        // Не рекомендуется использовать, так как указанный запрос
-                                        // будет выполняться при каждом запуске программы.
-        {
-            param.visibleflg = false;
-            if (param.name.Length()>0) {
-                queryitem->Variables["_" + param.name] = param.value;
-            }
-        }
-        else if (param.type == "string" )
-        {
-        }
-        if (param.type == "integer" )
-        {
-        }
-        if (param.type == "float" )
-        {
-        }
-        else if (param.type == "date")
-        {
-        }
-        else if (param.type == "list")       // Если тип параметра list
-        {
-
-        }
-        params->push_back(param);
         node = msxml.GetNextNode(node);
     }
 }
@@ -555,8 +474,9 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
         OleXml msxml;
         msxml.LoadXMLText(ParseStr);
 
-        if (msxml.GetParseError() != "")
+        if (msxml.GetParseError() != "") {
             return;
+        }
 
         Variant RootNode = msxml.GetRootNode();
         Variant node = msxml.GetFirstNode(RootNode);
@@ -566,7 +486,8 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
         queryitem->exportparam_id = "m_" + msxml.GetAttributeValue(RootNode, "default");
 
         int unassigned_id = 0;
-        while (!node.IsEmpty())
+        //while (!node.IsEmpty())
+        while ( !VarIsClear(node) )
         {
             if (LowerCase(msxml.GetAttributeValue(node, "enable")) == "false") {
                 node = msxml.GetNextNode(node);
@@ -577,46 +498,57 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
             // Если не задан параметр выгрузки по умолчанию,
             // то используется первый параметр, в порядке загрузке (именованый или с id = "0")
             if (queryitem->exportparam_id == "m_") {
-                queryitem->exportparam_id = msxml.GetAttributeValue(node, "id", "0");
+                queryitem->exportparam_id = msxml.GetAttributeValue(node, "id", AnsiString("0"));
             }
 
 
             String sNodeName = msxml.GetNodeName(node);
 
 
-            if (sNodeName == "excel") {  // exportparams - excel
+            if (sNodeName == "excel")   // exportparams - excel
+            {
                 if (queryitem->fExcelFile)    // Загружаем только первый параметр этого типа
+                {
                     break;
+                }
 
                 queryitem->param_excel.id = "m_" + msxml.GetAttributeValue(node, "id");
-                if (queryitem->param_excel.id == "m_") {
+                if (queryitem->param_excel.id == "m_")
+                {
                     queryitem->param_excel.id = IntToStr(unassigned_id++);
                 }
 
                 queryitem->param_excel.title_label = msxml.GetAttributeValue(node, "title", queryitem->queryname);
                 queryitem->param_excel.title_height = msxml.GetAttributeValue(node, "title-height", -1); // Высота заголовка в строках
-                queryitem->param_excel.template_name = msxml.GetAttributeValue(node, "template", "");
+                queryitem->param_excel.template_name = msxml.GetAttributeValue(node, "template", AnsiString(""));
                 queryitem->param_excel.fUnbounded = msxml.GetAttributeValue(node, "unbounded", false);
-                queryitem->param_excel.table_range_name = msxml.GetAttributeValue(node, "table_range", "");
+                queryitem->param_excel.table_range_name = msxml.GetAttributeValue(node, "table_range", AnsiString(""));
 
                 std::vector<EXCELFIELD>* ListFields = &queryitem->param_excel.Fields;
 
                 Variant subnode = msxml.GetFirstNode(node);
-                while (!subnode.IsEmpty())
+                //while (!subnode.IsEmpty())
+                while ( !VarIsClear(subnode) )
                 {
-                    if (msxml.GetNodeName(subnode) == "field") {
-
+                    if (msxml.GetNodeName(subnode) == "field")
+                    {
                         EXCELFIELD field;
                         field.format = LowerCase(msxml.GetAttributeValue(subnode, "format"));
                         field.name = msxml.GetAttributeValue(subnode, "name");
                         field.width = msxml.GetAttributeValue(subnode, "width", -1);    // Ширина столбца
                         attribute = LowerCase(Trim(msxml.GetAttributeValue(subnode, "wraptext")));  // перенос по словам
                         if (attribute == "false")
+                        }
                             field.bwraptext = 0;
+                        }
                         else if (attribute == "true")
+                        {
                             field.bwraptext = 1;
+                        }
                         else
+                        {
                             field.bwraptext = -1;
+                        }
 
                         ListFields->push_back(field);
                     }
@@ -624,23 +556,29 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                     subnode = msxml.GetNextNode(subnode);
                 }
 
-                if (queryitem->param_excel.id == queryitem->exportparam_id) {
-                    if (queryitem->param_excel.template_name == "") {   // В шаблон если указан шаблон
+                if (queryitem->param_excel.id == queryitem->exportparam_id)
+                {
+                    if (queryitem->param_excel.template_name == "")    // В шаблон если указан шаблон
+                    {
                         queryitem->DefaultExportType = EM_EXCEL_BLANK;
                     } else {
                         queryitem->DefaultExportType = EM_EXCEL_TEMPLATE;
                     }
                 }
 
-            } else if (sNodeName == "dbase4")
+            }
+            else if (sNodeName == "dbase4")
             {
                 if (queryitem->fDbfFile)    // Загружаем только первый параметр этого типа
+                {
                     break;
+                }
                 queryitem->fDbfFile = true;
                 queryitem->param_dbase.fAllowUnassignedFields = msxml.GetAttributeValue(node, "allowunassigned", false);
 
                 queryitem->param_dbase.id = "m_" + msxml.GetAttributeValue(node, "id");
-                if (queryitem->param_dbase.id == "m_") {
+                if (queryitem->param_dbase.id == "m_")
+                {
                     queryitem->param_dbase.id = IntToStr(unassigned_id++);
                 }
 
@@ -649,7 +587,8 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                 Variant subnode = msxml.GetFirstNode(node);
                 while (!subnode.IsEmpty())
                 {
-                    if (msxml.GetNodeName(subnode) == "field") {
+                    if (msxml.GetNodeName(subnode) == "field")
+                    {
                         DBASEFIELD field;
                         field.type = LowerCase(msxml.GetAttributeValue(subnode, "type"));
                         field.name = LowerCase(msxml.GetAttributeValue(subnode, "name"));
@@ -664,26 +603,33 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                     queryitem->DefaultExportType = EM_DBASE4_FILE;
                 }
 
-            } else if (sNodeName == "word") {
-               if (queryitem->fWordFile)   // Загружаем только первый параметр этого типа
+            } else if (sNodeName == "word")
+            {
+                if (queryitem->fWordFile)   // Загружаем только первый параметр этого типа
+                {
                     break;
+                }
                 queryitem->fWordFile = true;
 
                 queryitem->param_word.id = "m_" + msxml.GetAttributeValue(node, "id");
-                if (queryitem->param_word.id == "m_") {
+                if (queryitem->param_word.id == "m_")
+                {
                     queryitem->param_word.id = IntToStr(unassigned_id++);
                 }
 
                 queryitem->param_word.template_name = msxml.GetAttributeValue(node, "template");
-                queryitem->param_word.filter_main_field = msxml.GetAttributeValue(node, "filter_main_field", "");
-                queryitem->param_word.filter_sec_field = msxml.GetAttributeValue(node, "filter_sec_field", "");
-                queryitem->param_word.filter_infix_sec_field = msxml.GetAttributeValue(node, "filter_infix_sec_field", "");
+                queryitem->param_word.filter_main_field = msxml.GetAttributeValue(node, "filter_main_field", AnsiString(""));
+                queryitem->param_word.filter_sec_field = msxml.GetAttributeValue(node, "filter_sec_field", AnsiString(""));
+                queryitem->param_word.filter_infix_sec_field = msxml.GetAttributeValue(node, "filter_infix_sec_field", AnsiString(""));
                 queryitem->param_word.page_per_doc = msxml.GetAttributeValue(node, "page_per_doc", 0);
 
-                if (queryitem->param_word.id == queryitem->exportparam_id) {
+                if (queryitem->param_word.id == queryitem->exportparam_id)
+                {
                     queryitem->DefaultExportType = EM_WORD_TEMPLATE;
                 }
-            } if (sNodeName == "execute") {
+            }
+            else if (sNodeName == "execute")
+            {
                 queryitem->param_execute.id = "m_" + msxml.GetAttributeValue(node, "id");
                 if (queryitem->param_execute.id == "m_") {
                     queryitem->param_execute.id = IntToStr(unassigned_id++);
@@ -706,15 +652,18 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
         }
 
         if (queryitem->DefaultExportType == EM_UNDEFINITE) {
-            if (queryitem->param_excel.template_name == "") {   // В шаблон если указан шаблон
+            if (queryitem->param_excel.template_name == "")    // В шаблон если указан шаблон
+            {
                 queryitem->DefaultExportType = EM_EXCEL_BLANK;
-            } else {
+            }
+            else
+            {
                 queryitem->DefaultExportType = EM_EXCEL_TEMPLATE;
             }
         }
-
-
-    } catch (...) {
+    }
+    catch (...)
+    {
     }
 }
 
@@ -723,17 +672,20 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
 {
     // Проверяем не заблокированы ли запросы к БД
-    if (CheckLock(StrToInt(CurrentQueryItem->dbname))) {
+    if (CheckLock(StrToInt(CurrentQueryItem->dbname)))
+    {
         return;
     }
 
     // Проверяем не заблокированы ли запросы к БД
-    if (CurrentQueryItem->dbname2 !="" && CheckLock(StrToInt(CurrentQueryItem->dbname2))) {
+    if (CurrentQueryItem->dbname2 !="" && CheckLock(StrToInt(CurrentQueryItem->dbname2)))
+    {
         return;
     }
 
     THREADOPTIONS* threadopt = new THREADOPTIONS;
-    switch (ExportMode) {
+    switch (ExportMode)
+    {
         case EM_PROCEDURE: {
         // Предупреждаем, что может произойти необратимое изменение данных
             String msg = "Внимание! Выполнение данного запроса может привести к необратимому изменению данных. Продолжить?";
@@ -850,9 +802,13 @@ void __fastcall TForm1::ActionAsProcedureExecute(TObject *Sender)
 void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
 {
     if (CurrentQueryItem->param_excel.template_name == "")
+    {
         Run(EM_EXCEL_BLANK, 1);
+    }
     else
+    {
         Run(EM_EXCEL_TEMPLATE, 1);
+    }
 
 }
 
@@ -861,9 +817,13 @@ void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
 void __fastcall TForm1::ActionExportExcelBlankExecute(TObject *Sender)
 {
     if (CurrentQueryItem->param_excel.template_name == "")
+    {
         Run(EM_EXCEL_BLANK, 0);
+    }
     else
+    {
         Run(EM_EXCEL_TEMPLATE, 0);
+    }
 }
 
 /* Экспорт в MS Word
@@ -895,7 +855,8 @@ bool TForm1::TestParameters(const QueryVariables* queryParams)
 {
    for(QueryVariables::const_iterator variable = queryParams->begin(); variable != queryParams->end(); variable++)
    {
-        for (std::vector<String>::iterator injection = dangerWords.begin(); injection != dangerWords.end(); injection++ ) {
+        for (std::vector<String>::iterator injection = dangerWords.begin(); injection != dangerWords.end(); injection++ )
+        {
             if ( (*variable)->getType() == "string" && (*variable)->getValue().Pos( (*injection) ) )
             {
                 return false;   // test failed
@@ -920,7 +881,8 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
     // перенести в отдельную функцию!!!
 
     // Эту проверку перенести только на выполнение.!!!!!!!!!!!!!!!!!!!!! 2016-19-09
-    if ( queryParams!= NULL && !TestParameters(queryParams) ) {
+    if ( queryParams!= NULL && !TestParameters(queryParams) )
+    {
         return "SQL text contents injections.";
     }
 
@@ -928,7 +890,8 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 	std::vector<EXPLODESTRING> sqlstring;
     sqlstring = ExplodeByBackslash(SQLText, "/**", "**/", true);
 
-	for (unsigned int i = 0; i < sqlstring.size(); i++) {  // Цикл по параметрам в исходной строке
+	for (unsigned int i = 0; i < sqlstring.size(); i++)   // Цикл по параметрам в исходной строке
+    {
         EXPLODESTRING *item;
         item = &sqlstring[i];
     	if (item->fBacksleshed) { 			// Замена (подстановка) параметров в строке запроса если строка является  /** параметр **/
@@ -942,12 +905,11 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 
 
             // Если заданы параметры пользователя
-            if ( queryParams != NULL ) {
-
-
+            if ( queryParams != NULL )
+            {
                 for (QueryVariables::iterator it = (*queryParams).begin(); it != (*queryParams).end(); it++)
                 {   //Заменяем --Параметр на Значение
-                    TParamRecord *param =(*it);
+                    TParamRecord *param = (*it);
                     String paramName = param->getName();
                     String paramValue = param->getValue();
 
@@ -962,48 +924,15 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
  			                item->text = StringReplace(item->text, ":" + paramName, paramValue, replaceflags);
                         }
                     }
-                    //else  item->text = "";
                 }
-
-                /*for (QueryVariables::size_type j = 0; j < (*queryParams).size(); j++) {   //Заменяем --Параметр на Значение
-                    TParamRecord *param;
-                    param = (*queryParams)[j];
-
-                    param->name = param->name.Trim();		// Удаляем пробелы
-                    param->value = param->value.Trim();		// Удаляем пробелы
-                    if (param->name != "" && item->text.Pos(":"+param->name) > 0)
-                    {
-                        //bParamFined = true;
-                        if (param->deleteifflg == true && param->value.UpperCase() == param->deleteifvalue.UpperCase())
-                        {
-                            item->text = "";    // Удалям блок целиком
-                        }
-                        else
-                        {
- 			                item->text = StringReplace(item->text, ":"+param->name, param->value, replaceflags);     // Удаляем * * /
-                        }
-                    }
-                    //else  item->text = "";
-                }*/
-
-
             }
-
-              /*if (!bParamFined)   // Удаляем строку с параметром, если отсутствуют подходящие параметры в списке
-                item->text = "" + item->text + " ERROR! ONE OF THESE PARAMETERS NOT FOUND!";   */
         }
     }
 
+    // Собираем вектор в строку
     AnsiString result = Implode(sqlstring, "");
 
-    // Защита от Иньекций  (обработка запроса в целом)
-    /*for (int i = 0; i < nDangerWords; i++)
-        if (result.Pos(dangerWords[i]) != 0) {
-            result = "";
-            break;
-        } */
-
-    return result;  // Собираем вектор в строку и возращаем результат
+    return result;
 }
 
 
@@ -1013,90 +942,58 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 // заданных значением EsaleSession.
 void TForm1::InitEnvVariables()
 {
-    //m_env_var.reserve(4);
+    // Определение кода филиала
+    // и кода участка
+    // Здесь желательно переделать полностью
+    // Возможно следует использовать Роли в БД Oracle
+    TOraQuery *OraQuery = new TOraQuery(NULL);
+    OraQuery->Session = EsaleSession;
 
-    // Филиал
-    //AnsiString filial;      // Филиал  (id_rn)
-    //AnsiString maingroup;   // Участок
+    //OraQuery->SQL->Add("select * from raion where substr(:username,3,2) = substr(uuser,3,2)");
 
-/*    if (Username.UpperCase() == "ADMIN") {
-        filial = "01";
-        maingroup = "01";
-    } else if (Username.Length() == 7) { */
+    TOraQuery *EnvVarQueries = new TOraQuery(NULL);
 
+
+
+    OraQuery->SQL->Add("select * from " + envSpr);
+    OraQuery->Open();
+    while(!OraQuery->Eof)
     {
-        // Определение кода филиала
-        // и кода участка
-        // Здесь желательно переделать полностью
-        // Возможно следует использовать Роли в БД Oracle
-        TOraQuery *OraQuery = new TOraQuery(NULL);
-        OraQuery->Session = EsaleSession;
-        //OraQuery->SQL->Add("select * from raion where substr(:username,3,2) = substr(uuser,3,2)");
+        EnvVarQueries->Session = m_sessions[OraQuery->FieldByName("dbname")->AsInteger];
+        EnvVarQueries->SQL->Clear();
 
-        TOraQuery *EnvVarQueries = new TOraQuery(NULL);
+        String sqlText = GetSQL(OraQuery->FieldByName("sqltext1")->AsString);
+        EnvVarQueries->SQL->Add(sqlText);
+        EnvVarQueries->Open();
 
-
-
-        OraQuery->SQL->Add("select * from " + envSpr);
-        OraQuery->Open();
-        while(!OraQuery->Eof)
+        // Пополняем список перменных среды - по столбцам
+        for (int i = 1; i <= EnvVarQueries->FieldCount; i++)
         {
-            EnvVarQueries->Session = m_sessions[OraQuery->FieldByName("dbname")->AsInteger];
-            EnvVarQueries->SQL->Clear();
-
-            String sqlText = GetSQL(OraQuery->FieldByName("sqltext1")->AsString);
-            EnvVarQueries->SQL->Add(sqlText);
-            EnvVarQueries->Open();
-
-            // Пополняем список перменных среды - по столбцам
-            for (int i = 1; i <= EnvVarQueries->FieldCount; i++)
-            {
-                AddCustomVariable(EnvVarQueries->Fields->FieldByNumber(i)->DisplayName,
-                    EnvVarQueries->Fields->FieldByNumber(i)->AsString);
-            }
-            // Пополняем список перменных среды - по строкам
-            //while (!EnvVarQueries->Eof) {
-            //    AddEnvVariable(EnvVarQueries->FieldByName("name")->AsString,
-            //        EnvVarQueries->FieldByName("value")->AsString);
-            //    EnvVarQueries->Next();
-            //}
-
-            OraQuery->Next();
+            AddCustomVariable(EnvVarQueries->Fields->FieldByNumber(i)->DisplayName,
+                EnvVarQueries->Fields->FieldByNumber(i)->AsString);
         }
-        delete EnvVarQueries;
-        EnvVarQueries = NULL;
+        // Пополняем список перменных среды - по строкам
+        //while (!EnvVarQueries->Eof) {
+        //    AddEnvVariable(EnvVarQueries->FieldByName("name")->AsString,
+        //        EnvVarQueries->FieldByName("value")->AsString);
+        //    EnvVarQueries->Next();
+        //}
 
-        OraQuery->SQL->Clear();
-        delete OraQuery;
-        OraQuery = NULL;
-
-
-        /*OraQuery->SQL->Add("select  trim(to_char(nvl2(uch, '01', id),'00')) id, trim(to_char(nvl(uch, '01'),'00')) uch from raion"
-            " left join nasel_uch on nasel_uch.id_rn = raion.id where substr(:username,3,2) = substr(uuser,3,2)"
-            //" and substr(:username,2,2) <> '10'"
-            " order by nasel_uch.porydok");
-
-
-        OraQuery->ParamByName("username")->AsString = Username;
-        OraQuery->Open();
-
-        if (OraQuery->RecordCount == 0) {
-            filial = "01";
-            maingroup = "01";
-        } else {
-            filial = OraQuery->FieldByName("id")->AsString;
-            maingroup = OraQuery->FieldByName("uch")->AsString;
-        }
-        OraQuery->Close();
-        delete OraQuery;  */
-
-        //filial = Username.SubString(3, 2);
+        OraQuery->Next();
     }
+    delete EnvVarQueries;
+    EnvVarQueries = NULL;
+
+    OraQuery->SQL->Clear();
+    //delete OraQuery;
+    //OraQuery = NULL;
+
+
 
     // Формируем список полей в одну строку _roles
     String roles = "{";
-    TOraQuery *OraQuery = new TOraQuery(NULL);
-    OraQuery->Session = EsaleSession;
+    //TOraQuery *OraQuery = new TOraQuery(NULL);
+    //OraQuery->Session = EsaleSession;
     OraQuery->SQL->Add("select * from session_roles");
     OraQuery->Open();
     while (!OraQuery->Eof) {
@@ -1110,29 +1007,165 @@ void TForm1::InitEnvVariables()
     delete OraQuery;
 
     AddSystemVariable("roles", roles.LowerCase());
-
-
-    /*m_env_var.push_back(ENVITEM("_filial",filial));
-    m_env_var.push_back(ENVITEM("_maingroup",maingroup));
-    m_env_var.push_back(ENVITEM("_username", Username.LowerCase()));
-    m_env_var.push_back(ENVITEM("_roles", roles.LowerCase()));*/
 }
 
+/* Добавляет пользовательскую переменную */
 void __fastcall TForm1::AddCustomVariable(const String& name, const String& value)
 {
     systemVariables.addVariable(CUSTOM_VARIABLES_PREFIX + name, value);
 }
 
+/* Добавляет системную переменную */
 void __fastcall TForm1::AddSystemVariable(const String& name, const String& value)
 {
     systemVariables.addVariable(SYSTEM_VARIABLES_PREFIX + name, value);
 }
 
 
+/* Обработчик событий в потоке */
+/*
+void threadListener(const String& Message, int Status)
+{
+    switch (Status) {
+        case WM_THREAD_PROCEED_BEGIN_SQL:
+        {
+           Form1->Enabled = false;
+           Application->CreateForm(__classid(TForm_Wait), &Form_Wait);
+           Form_Wait->Label3->Caption = "Выполнение запроса...";
+           Form1->TotalTime = 0;
+           Form1->Timer1->Enabled = true;
+           Form_Wait->Show();
+           break;
+        }
+        case WM_THREAD_PROCEED_BEGIN_FETCH:
+        {
+           Form_Wait->Label3->Caption = "Извлечение данных...";
+           break;
+        }
+        case WM_THREAD_PROCEED_BEGIN_DOCUMENT:
+        {
+            Form_Wait->Label3->Caption = "Создание документа...";
+            break;
+        }
+        case WM_THREAD_PROCEED_EXCEL:
+            break;
 
-//---------------------------------------------------------------------------
-// Обработчик событий в потоке
-void __fastcall TForm1::OnThread(int Status, AnsiString Message)
+        case WM_THREAD_PROCEED_DONE:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form1->OdacLog->WriteLog("Report is prepared", Message);    // Запись в Лог-таблицу
+            Form_Wait->Release();
+            Form1->ts = NULL;
+            break;
+            // Далее выполняется OnThreadSuccess
+        }
+        case WM_THREAD_USER_CANCEL:      // Отмена пользователем
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            break;
+        }
+        case WM_THREAD_ERROR_BD_CANT_CONNECT:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "Не удалось подключиться к базе данных. \nПопробуйте выполнить запрос позднее.";
+            MessageBoxInf(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_NULL_RESULTS:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "С учетом заданных параметров получено 0 строк.\nПопробуйте изменить параметры отбора.";
+            MessageBoxInf(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_TOO_MORE_RESULTS:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "С учетом заданных параметров получено более 1 млн. строк.\nПопробуйте уточнить параметры отбора.";
+            MessageBoxInf(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_PARAMS_INCORRECT:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "Не удалось выполнить запрос.\nПроверьте корректность параметров отбора.";
+            MessageBoxStop(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_IN_PROCESS:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "Возникла ошибка в процессе обработки данных.\n" + Message;
+            MessageBoxStop(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_IN_PROCESS_ALT:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = Message;
+            MessageBoxStop(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_OPEN_QUERY:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "Возникла ошибка при открытии основного запроса.\n" + Message;
+            MessageBoxStop(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_OPEN_QUERY2:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "Возникла ошибка при открытии вспомогательного запроса.\n" + Message;
+            MessageBoxStop(msg);
+            break;
+        }
+        case WM_THREAD_EXECUTE_DONE:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "Выполнено успешно.\n";
+            MessageBoxInf(msg);
+            break;
+
+        }
+        case WM_THREAD_EXECUTE_ERROR:
+        {
+            Form1->Enabled = true;
+            Form1->Timer1->Enabled = false;
+            Form_Wait->Release();
+            AnsiString msg = "Возникла непредвиденная ошибка в процессе выполнения запроса.\n";
+            MessageBoxStop(msg);
+            break;
+        }
+    }
+} */
+
+
+
+/* Обработчик событий в потоке */
+//void __fastcall TForm1::threadListener(int Status, AnsiString Message)
+void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
 {
     switch (Status) {
         case WM_THREAD_PROCEED_BEGIN_SQL:
@@ -1162,7 +1195,7 @@ void __fastcall TForm1::OnThread(int Status, AnsiString Message)
         {
             this->Enabled = true;
             Timer1->Enabled = false;
-            OdacLog->WriteLog("Report is prepared");    // Запись в Лог-таблицу
+            OdacLog->WriteLog("Report is prepared", message[0]);    // Запись в Лог-таблицу
             Form_Wait->Release();
             ts = NULL;
             break;
@@ -1216,7 +1249,7 @@ void __fastcall TForm1::OnThread(int Status, AnsiString Message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка в процессе обработки данных.\n" + Message;
+            AnsiString msg = "Возникла ошибка в процессе обработки данных.\n" + message[0];
             MessageBoxStop(msg);
             break;
         }
@@ -1225,7 +1258,7 @@ void __fastcall TForm1::OnThread(int Status, AnsiString Message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = Message;
+            AnsiString msg = message[0];
             MessageBoxStop(msg);
             break;
         }
@@ -1234,7 +1267,7 @@ void __fastcall TForm1::OnThread(int Status, AnsiString Message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка при открытии основного запроса.\n" + Message;
+            AnsiString msg = "Возникла ошибка при открытии основного запроса.\n" + message[0];
             MessageBoxStop(msg);
             break;
         }
@@ -1243,7 +1276,7 @@ void __fastcall TForm1::OnThread(int Status, AnsiString Message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка при открытии вспомогательного запроса.\n" + Message;
+            AnsiString msg = "Возникла ошибка при открытии вспомогательного запроса.\n" + message[0];
             MessageBoxStop(msg);
             break;
         }
@@ -1982,44 +2015,19 @@ void __fastcall TForm1::ParamsLVAdvancedCustomDraw(
 // F1
 void __fastcall TForm1::ActionShowHelpExecute(TObject *Sender)
 {
-    //int nrezerv = ReservedParams.size();
-    AnsiString str;
-/*    str = "Список полей для автозамены на значения по умолчанию:\n";
-    for (int i = 0; i < nrezerv; i++) { // Заменяем на предопределенные значения
-        str += ReservedParams[i][0] + " = " + ReservedParams[i][1] + "\n";
-    }     */
-    str += "Образец заполнения параметров:\n"
-    "<?xml version=\"1.0\"?>\n"
-    "<parameters>\n"
-    "<parameter type=\"list\" name=\"param_year\" value=\"--curyear-6\" label=\"Год закрытия\">\n"
-    "    <item value=\"2014\" label=\"2014\"/>\n"
-    "    <item value=\"2015\" label=\"2015\"/>\n"
-    "</parameter>\n"
-    "<parameter type=\"list\" name=\"param_month\" value=\"--curmonth\" label=\"Месяц закрытия\">\n"
-    "    <item value=\"01\" label=\"январь\"/>\n"
-    "    <item value=\"02\" label=\"февраль\"/>\n"
-    "    <item value=\"03\" label=\"март\"/>\n"
-    "    <item value=\"04\" label=\"апрель\"/>\n"
-    "    <item value=\"05\" label=\"май\"/>\n"
-    "    <item value=\"06\" label=\"июнь\"/>\n"
-    "    <item value=\"07\" label=\"июль\"/>\n"
-    "    <item value=\"08\" label=\"август\"/>\n"
-    "    <item value=\"09\" label=\"сентябрь\"/>\n"
-    "    <item value=\"10\" label=\"октябрь\"/>\n"
-    "    <item value=\"11\" label=\"ноябрь\"/>\n"
-    "    <item value=\"12\" label=\"декабрь\"/>\n"
-    "</parameter>\n"
-    "<parameter type=\"list\" name=\"raion\" value=\"0\" label=\"Район\">\n"
-    "    <item src=\"select id value, fname label from raion\" dbindex=\"0\"/>\n"
-    "</parameter>\n"
-    "<parameter type=\"date\" name=\"date\" value=\"--firstdaycurmonth\" label=\"Дата\" format=\"dd.mm.yyyy\">\n"
-    "</parameter>\n"
-    "<parameter type=\"string\" name=\"test\" value=\"строка\" label=\"Наименование\">\n"
-    "</parameter>\n"
-    "</parameters>\n";
+    AnsiString str = "Горячие клавиши:\n"
+    "F1 \t- Настоящая справка\n"
+    "Ctrl+F1 \t- Отобразить список переменных среды\n"
+    "Ctrl+S \t- Отобразить текст основного запроса\n"
+    "Ctrl+Alt+S \t- Отобразить текст вспомогательного запроса\n"
+    "F8 \t- Выполнить запрос\n"
+    "Esc \t- Выход из программы\n"
+    "\n"
+    "Таблицы:\n"
+    "Справочник запросов основной: " + mainSpr + "\n"
+    "Справочник запросов для переменных среды: " + envSpr + "\n";
 
     MessageBoxInf(str, "Справка SQL2Excel");
-
 }
 //---------------------------------------------------------------------------
 // Ctrl+C
@@ -2124,8 +2132,10 @@ void __fastcall TForm1::BitBtn2Click(TObject *Sender)
 
 //---------------------------------------------------------------------------
 
-// Задает параметры потока
-// и запускает его
+
+/* Задает параметры потока
+   и запускает его
+*/
 void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
 {
     // Выполнение выбранного запроса
@@ -2169,8 +2179,15 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
     threadopt->TemplateOraSession2 = orasession2;
 
     // СОЗДАНИЕ И ЗАПУСК ПОТОКА
-    ts = new ThreadSelect(true);    // Создаем приостановленный поток
-    ts->SetThreadOpt(threadopt);    // Передаем параметры
+    ts = new ThreadSelect(true, threadopt);    // Создаем приостановленный поток
+    //ts = new ThreadSelect(true, threadopt, threadListener);    // Создаем приостановленный поток
+
+    //void (*f)(const String&, int);
+    //f = threadListener;
+
+
+
+    //ts->SetThreadOpt(threadopt);    // Передаем параметры
     ts->Resume();                   // Запускаем
 }
 

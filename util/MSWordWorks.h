@@ -64,6 +64,7 @@ NOTICES:
 
 
 #include "system.hpp"
+#include "math.h"
 #include <utilcls.h>
 #include "Comobj.hpp"
 #include "Ora.hpp"
@@ -127,7 +128,7 @@ public:
         void __fastcall SetTextToFieldF(Variant Document, String FieldName, WideString Text);
         Variant __fastcall SetPictureToField(Variant Document, String FieldName, String PictureFileName, int Width = 0, int Height = 0);
         std::vector<String> __fastcall GetFormFields(Variant Document);
-        void __fastcall FindTextForReplace(String Text, String ReplaceText, bool fReg = true);
+        void __fastcall FindTextForReplace(Variant document, String Text, String ReplaceText, bool fReg = true);
         void __fastcall InsertPicture(Variant Document, String PictureFileName, int Width = 0, int Height = 0);
         Variant CreateTable(Variant Document, int nCols, int nRows);
         void __fastcall InsertText(Variant Document, WideString Text);

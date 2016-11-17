@@ -53,7 +53,7 @@ public:
     Variant GetAttribute(Variant Node, const AnsiString& attributeName) const;
     AnsiString __fastcall GetAttributeText(Variant node, const AnsiString& attributeName) const;
     AnsiString __fastcall GetAttributeValue(Variant node, int attributeIndex) const;
-    AnsiString __fastcall GetAttributeValue(Variant node, const AnsiString& attributeName, const AnsiString& defaultValue = "") const;
+    AnsiString __fastcall GetAttributeValue(Variant node, const AnsiString& attributeName, AnsiString defaultValue = "") const;
     bool __fastcall GetAttributeValue(Variant node, const AnsiString& attributeName, bool defaultValue) const;
     int __fastcall GetAttributeValue(Variant node, const AnsiString& attributeName, int defaultValue) const;
     int __fastcall GetAttributesCount(Variant node) const;

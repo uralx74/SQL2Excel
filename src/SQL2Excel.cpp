@@ -35,6 +35,7 @@ USEUNIT("..\util\CommandLine.cpp");
 USEUNIT("Parameter.cpp");
 USEUNIT("Variables.cpp");
 USEUNIT("ParameterizedText.cpp");
+USEUNIT("QueryItem.cpp");
 //---------------------------------------------------------------------------
 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
@@ -139,8 +140,8 @@ WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	{
         Application->Initialize();
 		Application->CreateForm(__classid(TForm1), &Form1);
-         Application->CreateForm(__classid(TFormShowQuery), &FormShowQuery);
-         Application->Run();
+        Application->CreateForm(__classid(TFormShowQuery), &FormShowQuery);
+        Application->Run();
 	}
 	catch (Exception &exception)
 	{
