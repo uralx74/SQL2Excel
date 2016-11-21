@@ -17,6 +17,23 @@
 #include "..\MSWordWorks.h"
 
 
+class TThreadSelectMessage
+{
+public:
+    TThreadSelectMessage(unsigned int status, const AnsiString& message, std::vector<String> files);
+    TThreadSelectMessage(unsigned int status, const AnsiString& message);
+    unsigned int getStatus() { return _status; };
+    AnsiString getMessage() { return _message; };
+    std::vector<String> getFiles() { return _files; };
+
+private:
+    unsigned int _status;
+    //AnsiString _message;
+    AnsiString _message;
+    std::vector<String> _files;   // Список имен файлов - результатов
+};
+
+
 //typedef enum _EXPORTMODE{AS_PROCEDURE = 0, TO_EXCEL_FILE, TO_EXCEL_MEMORY, TO_DBASE4_FILE, AS_PROCEDURE, TO_WORD_FILE, TO_WORD_MEMORY} EXPORTMODE;
 
 typedef enum _TThreadStatus {
@@ -37,9 +54,9 @@ typedef enum _TThreadStatus {
     WM_THREAD_PROCEED_BEGIN_FETCH,    // Поток - начато извлечение данных из БД
     WM_THREAD_PROCEED_BEGIN_DOCUMENT, // Поток - начато создание документа
     WM_THREAD_PROCEED_EXCEL,       // Поток - продолжается работа с Excel, обрабатывается запись LPARAM
-    WM_THREAD_PROCEED_DONE,      // Поток окончен успешно
     WM_THREAD_EXECUTE_DONE,      // Поток окончен успешно (при запуске в качестве Процедуры)
-    WM_THREAD_EXECUTE_ERROR      // Поток окончен с ошибкой (при запуске в качестве Процедуры)
+    WM_THREAD_EXECUTE_ERROR,      // Поток окончен с ошибкой (при запуске в качестве Процедуры)
+    WM_THREAD_COMPLETED_SUCCESSFULLY      // Поток окончен успешно
 } TThreadStatus;
 
 //class TLogger;  // опережающее объявление
@@ -61,6 +78,7 @@ class TQueryItem;
 typedef struct {
     AnsiString dstfilename;
     EXPORTMODE exportmode;
+    String queryName;   // Наименование запроа
     String querytext;   // Текст основного запроса
     String querytext2;  // Текст дополнительного запроса
 
@@ -78,13 +96,9 @@ class ThreadSelect : public TThread
 public:
     //__fastcall ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt, void (*f)(const String&, int));
     __fastcall ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt);
-
     __fastcall ~ThreadSelect();
-
     TOraSession* __fastcall CreateOraSession(TOraSession* TemplateOraSession);
 
-
-    void __fastcall SyncThreadDone();
     void __fastcall SyncThreadChangeStatus();
 
 private:
@@ -98,12 +112,14 @@ private:
     TOraQuery* OraQueryMain;
     TOraQuery* OraQuerySecondary;   // Второй запрос (используется в отчетах в MS Word)
     static unsigned int _threadIndex;   // Счетчик потоков
-    int _threadId;  // Идентификатор потока
+    unsigned int _threadId;  // Идентификатор потока
+    TThreadStatus _threadStatus;
+    AnsiString _threadMessage;
 
-
-    AnsiString sQueryText;
-    AnsiString sQueryText2;
-    AnsiString sReportName;
+    std::vector<String> _resultFiles;   // Список имен файлов - результатов
+    AnsiString _mainQueryText;
+    AnsiString _secondaryQueryText;
+    AnsiString _reportName;
 
     EXPORT_PARAMS_EXCEL param_excel;
     EXPORT_PARAMS_WORD param_word;      //
@@ -111,10 +127,6 @@ private:
 
     std::vector<TParamRecord*> UserParams;    // Задаваемые параметры к запросу
 
-    TThreadStatus _threadStatus;
-    AnsiString _threadMessage;
-
-    std::vector<String> vResultFiles;   // Список имен файлов - результатов
 
     void SetThreadOpt(THREADOPTIONS* threadopt);
     void __fastcall Execute();
@@ -122,7 +134,7 @@ private:
     void __fastcall ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields);
     void __fastcall ExportToDBF(TOraQuery *OraQuery);   // Заполнение DBF-файла
     void __fastcall ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields);  // Заполнение отчета Word на базе шаблона
-
+    void __fastcall setStatus(_TThreadStatus status, const AnsiString& message = "");
 
     void (*f)(const String&, int);
 

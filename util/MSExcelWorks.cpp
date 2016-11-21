@@ -141,7 +141,8 @@ std::vector<AnsiString> __fastcall MSExcelWorks::GetNamesFromWorkbook(Variant& W
     std::vector<AnsiString> vFields;
     vFields.reserve(nNamesCount);
 
-    for(int i=1; i < nNamesCount + 1; i++) {
+    for(int i=1; i < nNamesCount + 1; i++)
+    {
         AnsiString sName = vNames.OleFunction("Item", i).OlePropertyGet("Name");
         vFields.push_back(sName);
     }
@@ -160,13 +161,16 @@ Variant __fastcall MSExcelWorks::GetRange(Variant& Worksheet, int firstRow, int 
 
 //----------------------------------------------------------------------------
 // Возращает Range по имени
-Variant __fastcall MSExcelWorks::GetRangeByName(Variant& Worksheet, AnsiString& RangeName)
+Variant __fastcall MSExcelWorks::GetRangeByName(Variant& Worksheet, const AnsiString& RangeName)
 {
-    try {
+    try
+    {
         //Variant range = Worksheet.OlePropertyGet("Cells", RangeName);       // Опасный поиск диапазона по имени
-        Variant range = Worksheet.OlePropertyGet("Range", RangeName);       // Опасный поиск диапазона по имени
+        Variant range = Worksheet.OlePropertyGet("Range", RangeName.c_str());       // Опасный поиск диапазона по имени
         return range;
-    } catch (EOleSysError &e) {
+    }
+    catch (EOleSysError &e)
+    {                       // Если поле с именем не найдено
         return Variant();
         //throw Exception("Не удалось определить Range по имени " + RangeName);
     }
@@ -418,11 +422,16 @@ void __fastcall MSExcelWorks::DateTimeCreateDoc(Variant& wst, int Row, int Col)
 // Выводит в ячейку строку в заданном формате
 Variant __fastcall MSExcelWorks::WriteToRange(const AnsiString &txt, Variant range, AnsiString format)
 {
-    if (range.IsEmpty())
+    //if (range.IsEmpty())
+    if ( VarIsClear(range))
+    {
         return range;
+    }
     if (format != "")
-        range.OlePropertySet("NumberFormat", format);   // устанавливаем формат строки для ячейки
-	range.OlePropertySet("Value", txt);
+    {
+        range.OlePropertySet("NumberFormat", format.c_str());   // устанавливаем формат строки для ячейки
+    }
+	range.OlePropertySet("Value", txt.c_str());
 	return range;
 }
 
@@ -623,7 +632,7 @@ Variant __fastcall MSExcelWorks::OpenDocument(AnsiString TemplateName)
     Variant Book;
     if (TemplateName != "") {   // Открыть существующий документ
 	    try {
-            Book = WorkBooks.OlePropertyGet("Open", TemplateName);
+            Book = WorkBooks.OlePropertyGet("Open", TemplateName.c_str());
   	    } catch (Exception &exception)	{
             throw Exception("Ошибка при открытии файла: " + TemplateName + ".");
         }
@@ -977,17 +986,23 @@ void MSExcelWorks::ExportToExcelFields(TOraQuery* QTable, Variant Worksheet)
         //int FieldCount = msexcel.GetRangeColumnsCount(range_body);
 
         if ( !(QTable != NULL && QTable->RecordCount > 0) )
+        {
             return;
+        }
 
         Variant Workbook = Worksheet.OlePropertyGet("Parent");
         std::vector<AnsiString> vExcelFields = msexcel.GetNamesFromWorkbook(Workbook);
 
-        for (std::vector<AnsiString>::iterator itExcelField = vExcelFields.begin(); itExcelField < vExcelFields.end(); itExcelField++) {
+        for (std::vector<AnsiString>::iterator itExcelField = vExcelFields.begin(); itExcelField < vExcelFields.end(); itExcelField++)
+        {
             TField* pField = QTable->Fields->FindField(*itExcelField);
-            if (pField) {
+            if (pField)
+            {
                 try {
                     Variant range = msexcel.GetRangeByName(Worksheet, *itExcelField);
-                    if ( !VarIsEmpty(range) ) {
+                    // Закомментировано 2016-11-17
+                    //if ( !VarIsEmpty(range) ) {
+                    if ( !VarIsClear(range) ) {
                         msexcel.WriteToRange(QTable->FieldByName(*itExcelField)->AsString, range);
                     }
                 } catch (...) {

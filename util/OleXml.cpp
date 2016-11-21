@@ -232,28 +232,11 @@ AnsiString __fastcall OleXml::GetAttributeValue(Variant node, const AnsiString& 
     Variant attribute = GetAttribute(node, attributeName);
     return (VarIsClear(attribute)) ? DefaultValue : VarToStr( attribute.OlePropertyGet("text") );
 
-    /*if (attribute.IsEmpty()) {
-        DefaultValue = "";
-    }
-    if (attribute.IsNull()) {
-        DefaultValue = "";
-    }
-    VarCheckEmpty(attribute);
-    if (VarIsClear(attribute)) {
-        DefaultValue = "";
-    }
-    if (VarIsStr(attribute) ) {
-        DefaultValue = "";
-    }    */
-
-
-
-
     // commented 2016-11-17
     //return (attribute.IsEmpty()) ? DefaultValue : VarToStr( attribute.OlePropertyGet("text") );
 
 
-    
+
     /*
     AnsiString attribute = Trim( GetAttributeValue( Node, StringToOleStr(AttributeName) ) );
 

@@ -46,15 +46,18 @@ __published:	// IDE-managed Components
 private:	// User declarations
     AnsiString AppName;
     TKeyboardUtil KeyboardUtil;
+    TOraSession *_session;
+    int _retryCount;
+
 
 public:		// User declarations
     __fastcall TLoginForm(TComponent* Owner);
-    int RetryCount;
-    bool __fastcall Execute(TOraSession* Session, String Username="", String Password="");
+    __fastcall ~TLoginForm();
+    String getUsername();
+    bool __fastcall Execute(TOraSession* const Session, const String& Username = "", const String& Password = "");
     bool __fastcall CheckRole(AnsiString Role);
     std::vector<AnsiString>* __fastcall GetUserPriveleges();
 
-    TOraSession *Session;
 };
 //---------------------------------------------------------------------------
 extern PACKAGE TLoginForm *LoginForm;

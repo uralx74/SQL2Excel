@@ -133,7 +133,7 @@ public:
 	Variant __fastcall GetActiveSheet();
 	Variant __fastcall GetSheet(Variant& Workbook, int SheetIndex = 1);
     Variant __fastcall GetRange(Variant& Worksheet, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
-    Variant __fastcall GetRangeByName(Variant& Worksheet, AnsiString& RangeName);
+    Variant __fastcall GetRangeByName(Variant& Worksheet, const AnsiString& RangeName);
     Variant __fastcall GetRangeFromRange(Variant& range, int firstRow, int firstCol, int countRow = 1, int countCol = 1);
     std::vector<AnsiString> __fastcall GetNamesFromWorkbook(Variant& WorksheetOrWorkbook);
     std::vector<AnsiString> __fastcall GetNamesFromWorksheet(Variant& Worksheet);

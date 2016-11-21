@@ -7,8 +7,13 @@
 #include "ThreadSelect.h"
 #include "FMain.h"
 
+#include "dbf.hpp"
+#include "Dbf_Lang.hpp"
+
+
 
 unsigned int ThreadSelect::_threadIndex = 0;
+
 /**/
 //__fastcall ThreadSelect::ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt, void (*f)(const String&, int))
 __fastcall ThreadSelect::ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt)
@@ -24,7 +29,8 @@ __fastcall ThreadSelect::ThreadSelect(bool CreateSuspended, THREADOPTIONS* threa
     SetThreadOpt(threadopt);
     _threadIndex++;
 
-    _threadId = rand();
+    randomize();
+    _threadId = random(9999999999);
 }
 
 /**/
@@ -46,7 +52,7 @@ __fastcall ThreadSelect::~ThreadSelect()
     ThreadOraSession = NULL;
     ThreadOraSession2 = NULL;
 
-    vResultFiles.clear();
+    _resultFiles.clear();
 
     //QueryParams.free();
 
@@ -58,10 +64,11 @@ void ThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
 {
     //m_th_opt = *threadopt;
     this->ParentFormHandle = threadopt->ParentFormHandle;   // Handle главной формы
-    this->sQueryText = threadopt->querytext;        // Текст запроса
-    this->sQueryText2 = threadopt->querytext2;      // Текст запроса
-    this->DstFileName = threadopt->dstfilename;     // Имя результирующего файла
-    this->ExportMode = threadopt->exportmode;       // Режим экспорта _EXPORTMODE
+    this->_reportName = threadopt->queryName;
+    this->_mainQueryText = threadopt->querytext;            // Текст запроса
+    this->_secondaryQueryText = threadopt->querytext2;      // Текст запроса
+    this->DstFileName = threadopt->dstfilename;         // Имя результирующего файла
+    this->ExportMode = threadopt->exportmode;           // Режим экспорта _EXPORTMODE
 
 
     ThreadOraSession = CreateOraSession(threadopt->TemplateOraSession);
@@ -174,32 +181,31 @@ void __fastcall ThreadSelect::Execute()
 {
     if (!ThreadOraSession->Connected)
     {
-        _threadStatus = WM_THREAD_ERROR_BD_CANT_CONNECT;
-        _threadMessage = "Произошла ошибка. База данных недоступна.";
+        setStatus(WM_THREAD_ERROR_BD_CANT_CONNECT, "Произошла ошибка. База данных недоступна.");
         this->Terminate();
     }
 
     if (!this->Terminated)
     {
-        _threadStatus = WM_THREAD_PROCEED_BEGIN_SQL;
+        setStatus(WM_THREAD_PROCEED_BEGIN_SQL, _reportName);
         Synchronize(SyncThreadChangeStatus);
 
         if (ExportMode == EM_PROCEDURE)
         {
             // Выполнить как процедуру
-            try {
+            try
+            {
                 OraQueryMain = new TOraQuery(NULL);
                 OraQueryMain->FetchAll = true;
                 OraQueryMain->Session = ThreadOraSession;
-                OraQueryMain->SQL->Add(sQueryText);
+                OraQueryMain->SQL->Add(_mainQueryText);
                 OraQueryMain->Execute();
 
-                _threadStatus = WM_THREAD_EXECUTE_DONE;
+                setStatus(WM_THREAD_EXECUTE_DONE);
             }
             catch (Exception &e)
             {
-                _threadMessage = e.Message;
-                _threadStatus = WM_THREAD_EXECUTE_ERROR;
+                setStatus(WM_THREAD_EXECUTE_ERROR, e.Message);
             }
 
             try
@@ -222,47 +228,49 @@ void __fastcall ThreadSelect::Execute()
             Тогда необходимо выводить соответствующий текст об ошибке.
             Сейчас выводится "... Проверте правильность запроса."*/
 
-    if (!this->Terminated && sQueryText != "")    // Если задан первый запрос
+    if (!this->Terminated && _mainQueryText != "")    // Если задан первый запрос
     {
         // Пробуем выполниь основной запрос
         try
         {
-            OraQueryMain = OpenOraQuery(ThreadOraSession, sQueryText, false);
+            OraQueryMain = OpenOraQuery(ThreadOraSession, _mainQueryText, false);
         }
         catch (Exception &e)
         {
-            _threadMessage = "Ошибка при попытке выполнить запрос.\n" + e.Message;
-        }
-
-        if (!this->Terminated && OraQueryMain == NULL)
-        {
-            _threadStatus = WM_THREAD_ERROR_OPEN_QUERY;
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY, "Ошибка при попытке выполнить запрос.\n" + e.Message);
             this->Terminate();
         }
+
+        /*if (!this->Terminated && OraQueryMain == NULL)
+        {
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY);
+            this->Terminate();
+        }*/
     }
 
-    if (!this->Terminated && sQueryText2 != "")     // Если задан второй запрос
+    if (!this->Terminated && _secondaryQueryText != "")     // Если задан второй запрос
     {    // Пробуем выполниь вспомогательный запрос
         try
         {
-            OraQuerySecondary = OpenOraQuery(ThreadOraSession2, sQueryText2, false);
+            OraQuerySecondary = OpenOraQuery(ThreadOraSession2, _secondaryQueryText, false);
         }
         catch (Exception &e)
         {
-            _threadMessage = "Ошибка при попытке выполнить запрос.\n" + e.Message;
-        }
-
-        if (OraQuerySecondary == NULL)
-        {
-            _threadStatus = WM_THREAD_ERROR_OPEN_QUERY2;
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY2, "Ошибка при попытке выполнить запрос.\n" + e.Message);
             this->Terminate();
         }
+
+        /*if (OraQuerySecondary == NULL)
+        {
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY2);
+            this->Terminate();
+        } */
     }
 
     if (!this->Terminated)
     {
         // Извлечение данных из запроса
-        _threadStatus = WM_THREAD_PROCEED_BEGIN_FETCH;
+        setStatus(WM_THREAD_PROCEED_BEGIN_FETCH);
         Synchronize(SyncThreadChangeStatus);
     }
 
@@ -276,20 +284,20 @@ void __fastcall ThreadSelect::Execute()
 
         if (RecCount <= 0) // Если запрос не вернул записей
         {
-            _threadStatus = WM_THREAD_ERROR_NULL_RESULTS;
+            setStatus(WM_THREAD_ERROR_NULL_RESULTS);
             this->Terminate();
         }
         else if (RecCount > 200000 && RecCount < 1000000) // Если запрос вернул более 200 000 записей
         {
             AnsiString msg = "С учетом заданных параметров получено " + IntToStr(RecCount) +" строк.\nФормирование отчета может занять длительное время.\nСформировать отчет?";
             if (MessageBoxQuestion(msg) == IDNO) {
-                _threadStatus = WM_THREAD_USER_CANCEL;
+                setStatus(WM_THREAD_USER_CANCEL);
                 this->Terminate();
             }
         }
         else if (RecCount >= 1000000)
         {
-            _threadStatus = WM_THREAD_ERROR_TOO_MORE_RESULTS;
+            setStatus(WM_THREAD_ERROR_TOO_MORE_RESULTS);
             this->Terminate();
         }
     }
@@ -297,8 +305,9 @@ void __fastcall ThreadSelect::Execute()
     // Создание документа
     if ( !this->Terminated )
     {
-        try {
-            _threadStatus = WM_THREAD_PROCEED_BEGIN_DOCUMENT;
+        try
+        {
+            setStatus(WM_THREAD_PROCEED_BEGIN_DOCUMENT);
             Synchronize(SyncThreadChangeStatus);
 
             switch (ExportMode) {
@@ -324,8 +333,7 @@ void __fastcall ThreadSelect::Execute()
         }
         catch ( Exception& e )
         {
-            _threadMessage = e.Message;
-            _threadStatus = WM_THREAD_ERROR_IN_PROCESS;
+            setStatus(WM_THREAD_ERROR_IN_PROCESS, e.Message);
             this->Terminate();
         }
         if ( _threadStatus != WM_THREAD_PROCEED_BEGIN_DOCUMENT )
@@ -363,32 +371,38 @@ void __fastcall ThreadSelect::Execute()
             {
             }
         }
-        _threadStatus = WM_THREAD_PROCEED_DONE;
+        setStatus(WM_THREAD_COMPLETED_SUCCESSFULLY);
     }
 
-    if (_threadStatus == WM_THREAD_PROCEED_DONE)
-    {
-        Synchronize(SyncThreadDone);
-    }
-    else
-    {
-        Synchronize(SyncThreadChangeStatus);
-    }
+    Synchronize(SyncThreadChangeStatus);
+}
+
+
+TThreadSelectMessage::TThreadSelectMessage(unsigned int status, const AnsiString& message, std::vector<String> files) :
+    _status(status),
+    _message(message),
+    _files(files)
+{
+}
+
+TThreadSelectMessage::TThreadSelectMessage(unsigned int status, const AnsiString& message) :
+    _status(status),
+    _message(message)
+{
+}
+
+void __fastcall ThreadSelect::setStatus(_TThreadStatus status, const AnsiString& message)
+{
+    _threadStatus = status;
+    _threadMessage = message;
+
 }
 
 /* Синхронизация - изменение статуса выполнения запроса */
 void __fastcall ThreadSelect::SyncThreadChangeStatus()
 {
-    ///!!! ВНИМАНИЕ ЗДЕСЬ НЕ ДОДЕЛАНО 2016-11-16
-    //Form1->threadListener(_threadStatus, _threadMessage);
-}
-
-/* Синхронизация - выполненние запроса завершено успешно, передача списка файлов - результатов */
-void __fastcall ThreadSelect::SyncThreadDone()
-{
-    ///!!! ВНИМАНИЕ ЗДЕСЬ НЕ ДОДЕЛАНО 2016-11-16
-    //Form1->threadListener(_threadStatus, _threadMessage);
-    Form1->OnThreadSuccess(ExportMode, vResultFiles);
+    TThreadSelectMessage message(_threadStatus, _threadMessage, _resultFiles);
+    Form1->threadListener(_threadId, message);
 }
 
 /*
@@ -443,7 +457,7 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
         // Если задан один запрос, то делаем только слияние
         // Слияние документа Word с таблицей
         if (QueryMerge->RecordCount > 0) {
-            vResultFiles = msword.ExportToWordFields(QueryMerge, Document, SavePath, ResultFileNamePrefix + "_", param_word.page_per_doc);
+            _resultFiles = msword.ExportToWordFields(QueryMerge, Document, SavePath, ResultFileNamePrefix + "_", param_word.page_per_doc);
         }
     } else {
         // Если задано два запроса, то:
@@ -569,7 +583,7 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
                     break;
                 }
 
-                vResultFiles.insert(vResultFiles.end(), vNew.begin(), vNew.end());
+                _resultFiles.insert(_resultFiles.end(), vNew.begin(), vNew.end());
                 vNew.clear();
             }
 
@@ -844,10 +858,10 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
         Variant range_sqltext;
         int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
-        int n = ceil( (float) sQueryText.Length() / PartMaxLength);
+        int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
         for (int i = 1; i <= n; i++)
         {
-            AnsiString sQueryPart = sQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
+            AnsiString sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
             range_sqltext = msexcel.WriteToCell(Worksheet2, sQueryPart, i, 1);
             msexcel.SetRangeFormat(range_sqltext, cf_sql);
         }
@@ -865,7 +879,7 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
             VarClear(Worksheet1);
             VarClear(Worksheet2);
             msexcel.CloseApplication();
-            vResultFiles.push_back(DstFileName);
+            _resultFiles.push_back(DstFileName);
         }
 
 
@@ -972,7 +986,7 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
         {
             msexcel.SaveDocument(Workbook, DstFileName);
             msexcel.CloseApplication();
-            vResultFiles.push_back(DstFileName);
+            _resultFiles.push_back(DstFileName);
         }
         catch (Exception &e)
         {
@@ -999,10 +1013,11 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
 // Переделать эту функцию с использование компонента TDbf
 void __fastcall ThreadSelect::ExportToDBF(TOraQuery *OraQuery)
 {
-    TStringList* ListFields;
+    /*TStringList* ListFields;
     int n = this->param_dbase.Fields.size();
     if (n > 0)    // Формируем список полей для экспорта в DBF ("Имя;Тип;Длина;Длина дробной части")
-    {    ListFields = new TStringList();
+    {
+        ListFields = new TStringList();
         for (int i = 0; i < n; i++)
         {
             ListFields->Add(param_dbase.Fields[i].name + ";" + param_dbase.Fields[i].type + ";"+ param_dbase.Fields[i].length + ";" + param_dbase.Fields[i].decimals);
@@ -1013,75 +1028,100 @@ void __fastcall ThreadSelect::ExportToDBF(TOraQuery *OraQuery)
         _threadMessage = "Не задан список полей в параметрах экспорта."
             "\nПожалуйста, обратитесь к системному администратору.";
         throw Exception(_threadMessage);
-    }
+    }*/
 
     // Это условие убрано, в связи с тем, что некоторые поля могут оставаться пустыми
-    if (ListFields->Count > OraQuery->FieldCount && !param_dbase.fAllowUnassignedFields) {
+    if (param_dbase.Fields.size() > OraQuery->FieldCount && !param_dbase.fAllowUnassignedFields)
+    {
         _threadMessage = "Количество требуемых полей превышает количество полей в источнике данных."
             "\nПожалуйста, обратитесь к системному администратору.";
         throw Exception(_threadMessage);
     }
 
+    if (param_dbase.Fields.size() == 0) {
+        _threadMessage = "Не задан список полей в параметрах экспорта."
+            "\nПожалуйста, обратитесь к системному администратору.";
+        throw Exception(_threadMessage);
+    }
 
-    ///!!! ВНИМАНИЕ ЗДЕСЬ НЕ ДОДЕЛАНО 2016-11-16
-    // Переделать на TDBF
-    /*
+    // Создаем dbf-файл назначения
+    TDbf* pTable = new TDbf(NULL);
 
-    TCreateHalcyonDataSet* CreateDbfDS;
-    CreateDbfDS = new TCreateHalcyonDataSet(NULL);
+    //pTableDst->TableLevel = 7; // required for AutoInc field
+    pTable->TableLevel = 4;
+    pTable->LanguageID = DbfLangId_RUS_866;
 
-    THalcyonDataSet* HalcyonDataSet1;
-    HalcyonDataSet1 = new THalcyonDataSet(NULL);
+    pTable->TableName = ExtractFileName(DstFileName);
+    pTable->FilePathFull = ExtractFilePath(DstFileName);
 
-    HalcyonDataSet1->TableName = ExtractFileName(DstFileName);
-    HalcyonDataSet1->DatabaseName = ExtractFilePath(DstFileName);
 
-    CreateDbfDS->DBFTable = HalcyonDataSet1;
-    CreateDbfDS->DBFType = DBaseIV;
-    CreateDbfDS->AutoOverwrite = true;
+    // Создаем определение полей таблицы из параметров
+    TDbfFieldDefs* TempFieldDefs = new TDbfFieldDefs(NULL);
 
-    CreateDbfDS->CreateFields->Clear();
-    CreateDbfDS->CreateFields->AddStrings(ListFields);
-    CreateDbfDS->Execute();
-    delete ListFields;
+    if (TempFieldDefs == NULL) {
+        _threadMessage = "Can't create storage.";
+        throw Exception(_threadMessage);
+    }
 
-    HalcyonDataSet1->DisableControls();
-    HalcyonDataSet1->Open();
-    HalcyonDataSet1->CheckBrowseMode();
-    HalcyonDataSet1->UpdateCursorPos();
+    for(std::vector<DBASEFIELD>::iterator it = param_dbase.Fields.begin(); it < param_dbase.Fields.end(); it++ )
+    {
+        TDbfFieldDef* TempFieldDef = TempFieldDefs->AddFieldDef();
+        TempFieldDef->FieldName = it->name;
+        //TempFieldDef->Required = true;
+        //TempFieldDef->FieldType = Field->type;    // Use FieldType if Field->Type is TFieldType else use NativeFieldType
+        TempFieldDef->NativeFieldType = it->type[1];
+        TempFieldDef->Size = it->length;
+        TempFieldDef->Precision = it->decimals;
+    }
 
+    if (TempFieldDefs->Count == 0)
+    {
+        delete pTable;
+        _threadMessage = "Не удалось загрузить описание полей.";
+        throw Exception(_threadMessage);
+    }
+
+    pTable->CreateTableEx(TempFieldDefs);
+    pTable->Exclusive = true;
     try
     {
-	    while (!OraQuery->Eof)
+        pTable->Open();
+    }
+    catch (Exception &e)
+    {
+        _threadMessage = e.Message;
+    }
+
+    // Запись данных в таблицу
+    try
+    {
+	    while ( !OraQuery->Eof )
         {
-            HalcyonDataSet1->Append();
+            pTable->Append();
 		    for (int j = 1; j <= OraQuery->FieldCount; j++ )
             {
-                //HalcyonDataSet1->Edit();
-                //AssignRecord(Table1, HalcyonDataSet1, True);
-                HalcyonDataSet1->Fields->FieldByNumber(j)->Value = OraQuery->Fields->FieldByNumber(j)->Value;
+                pTable->Fields->FieldByNumber(j)->Value = OraQuery->Fields->FieldByNumber(j)->Value;
             }
             OraQuery->Next();  // Переходим к следующей записи
 	    }
-        HalcyonDataSet1->Post();
-        HalcyonDataSet1->Close();
+        pTable->Post();
+        pTable->Close();
 
-        vResultFiles.push_back(DstFileName);
+        _resultFiles.push_back(DstFileName);
 
     }
     catch(Exception &e)
     {
-        HalcyonDataSet1->Close();
+        pTable->Close();
 
-
-        delete HalcyonDataSet1;
-        delete CreateDbfDS;
+        delete TempFieldDefs;
+        delete pTable;
 
         _threadMessage = e.Message;
         throw Exception(e);
     }
 
-    delete HalcyonDataSet1;
-    delete CreateDbfDS;   */
+    delete TempFieldDefs;
+    delete pTable;
 }
 

@@ -22,20 +22,10 @@
 #pragma hdrstop
 #include "fmain.h"
 
-USERES("SQL2Excel.res");
 USEFORM("FMain.cpp", Form1);
-USEUNIT("ThreadSelect.cpp");
 USEFORM("FormWait.cpp", Form_Wait);
 USEFORM("FShowQuery.cpp", FormShowQuery);
 USEFORM("..\util\FormLogin\FormLogin.cpp", LoginForm);
-USEUNIT("..\util\MSExcelWorks.cpp");
-USEUNIT("..\util\OleXml.cpp");
-USEUNIT("..\util\MSWordWorks.cpp");
-USEUNIT("..\util\CommandLine.cpp");
-USEUNIT("Parameter.cpp");
-USEUNIT("Variables.cpp");
-USEUNIT("ParameterizedText.cpp");
-USEUNIT("QueryItem.cpp");
 //---------------------------------------------------------------------------
 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
@@ -140,8 +130,8 @@ WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	{
         Application->Initialize();
 		Application->CreateForm(__classid(TForm1), &Form1);
-        Application->CreateForm(__classid(TFormShowQuery), &FormShowQuery);
-        Application->Run();
+         Application->CreateForm(__classid(TFormShowQuery), &FormShowQuery);
+         Application->Run();
 	}
 	catch (Exception &exception)
 	{

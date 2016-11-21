@@ -24,32 +24,53 @@
 #pragma link "Ora"
 #pragma resource "*.dfm"
 TLoginForm *LoginForm;
+
+const defaul_retry_count = 3;
 //---------------------------------------------------------------------------
 //
 __fastcall TLoginForm::TLoginForm(TComponent* Owner)
-    : TForm(Owner)
+    : TForm(Owner),
+    _retryCount(defaul_retry_count)
 {
-    RetryCount = 3;
+    _session = new TOraSession(NULL);
+}
+
+__fastcall TLoginForm::~TLoginForm()
+{
+    delete _session;
 }
 
 //---------------------------------------------------------------------------
 //
-bool __fastcall TLoginForm::Execute(TOraSession* Session, String Username, String Password)
+bool __fastcall TLoginForm::Execute(TOraSession* const Session, const String& Username, const String& Password)
 {
-    this->Session = Session;
-    Session->LoginPrompt = false;
+
+    _session->AssignConnect(Session);
+    _session->Connected = false;
+    _session->LoginPrompt = false;
     if (Username == "")
+    {
         this->ShowModal();
-    else {
-        Session->Username = Username;
-        Session->Password = Password;
-        try {
+    }
+    else
+    {
+        _session->Username = Username;
+        _session->Password = Password;
+        try
+        {
             Session->Connect();
-        } catch (...) {}
+        } catch (...)
+        {
+        }
     }
 
     //Free();
-    return Session->Connected;
+    return _session->Connected;
+}
+
+String TLoginForm::getUsername()
+{
+    return _session->Username;
 }
 
 //---------------------------------------------------------------------------
@@ -93,21 +114,29 @@ void __fastcall TLoginForm::LoginExecute(TObject *Sender)
 {
     static int TryNumber = 0;
 
-    Session->Username = UsernameEdit->Text;
-    Session->Password = PasswordMaskEdit->Text;
+    _session->Username = UsernameEdit->Text;
+    _session->Password = PasswordMaskEdit->Text;
+    PasswordMaskEdit->Text = "";
 
-    try {
-        Session->Connected = true;
+    try
+    {
+        _session->Connected = true;
         this->Close();
-    } catch (EOraError &DatabaseError) {
+    }
+    catch (EOraError &DatabaseError)
+    {
+        _session->Password = "";
         MessageBoxStop(DatabaseError.Message);
         TryNumber++;
-        if (TryNumber < RetryCount) {
+        if (TryNumber < _retryCount)
+        {
             PasswordMaskEdit->SetFocus();
             //PasswordMaskEdit->SelStart = 0;
             //PasswordMaskEdit->SelLength = -1;
-        } else {
-            Session = NULL;
+        }
+        else
+        {
+            this->_session = NULL;
             this->Close();
         }
     }
@@ -118,7 +147,7 @@ void __fastcall TLoginForm::LoginExecute(TObject *Sender)
 bool __fastcall TLoginForm::CheckRole(AnsiString Role)
 {
     TOraQuery* Query = new TOraQuery(NULL);
-    Query->Session = Session;
+    Query->Session = this->_session;
     Query->SQL->Text = "SELECT * FROM ALL_TAB_PRIVS WHERE GRANTEE = :P_ROLE";
 
 
@@ -131,7 +160,9 @@ bool __fastcall TLoginForm::CheckRole(AnsiString Role)
     delete Query;
 
     if (!result)
+    {
         MessageBoxStop("Вы не имеете прав доступа к этой программе. \n\nОтказано в доступе.");
+    }
 
     return result;
 }
@@ -142,7 +173,7 @@ std::vector<AnsiString>* __fastcall TLoginForm::GetUserPriveleges()
 {
 
     TOraQuery* Query = new TOraQuery(NULL);
-    Query->Session = Session;
+    Query->Session = this->_session;
     Query->SQL->Text = "select * from SESSION_ROLES";
     //Query->SQL->Text = "SELECT DISTINCT GRANTEE FROM ALL_TAB_PRIVS";
     Query->FetchAll = true;
@@ -151,7 +182,8 @@ std::vector<AnsiString>* __fastcall TLoginForm::GetUserPriveleges()
     std::vector<AnsiString>* result = new std::vector<AnsiString>;
     result->reserve(Query->RecordCount);
 
-    for (;!Query->Eof ; Query->Next()) {
+    for (;!Query->Eof ; Query->Next())
+    {
         result->push_back(Query->FieldByName("ROLE")->AsString);
     }
 
@@ -172,17 +204,22 @@ void __fastcall TLoginForm::CancelExecute(TObject *Sender)
 //
 void __fastcall TLoginForm::FormClose(TObject *Sender, TCloseAction &Action)
 {
-    try {
-        if (Session != NULL && Session->Connected) {
+    try
+    {
+        if (this->_session != NULL && this->_session->Connected)
+        {
             TRegistry* pReg = new TRegistry();
             pReg->RootKey = HKEY_CURRENT_USER;
-            if (pReg->OpenKey(AppName, true)) {
-                pReg->WriteString("Username", Session->Username);
+            if (pReg->OpenKey(AppName, true))
+            {
+                pReg->WriteString("Username", this->_session->Username);
                 pReg->CloseKey();
             }
             delete pReg;
         }
-    } catch (...) {
+    }
+    catch (...)
+    {
     }
     Timer1->Enabled = false;
 }

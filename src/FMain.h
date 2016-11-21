@@ -11,7 +11,7 @@
 #include "Ora.hpp"
 #include "..\util\OleXml.h"
 #include "..\util\taskutils.h"
-#include "..\util\odacutils.h"
+//#include "..\util\odacutils.h"
 #include "..\util\formlogin\formlogin.h"
 #include "..\util\appver.h"
 #include "..\util\CommandLine.h"
@@ -43,6 +43,7 @@
 #include <DB.hpp>
 #include "MemDS.hpp"
 #include "EditAlt.h"
+#include "OraLogger.h"
 
 class LvParameter: public Parameter
 {
@@ -121,7 +122,6 @@ __published:	// IDE-managed Components
     TAction *ActionAsProcedure;
     TAction *ActionApplictionExit;
     TAction *ActionShowEnvironment;
-        TConnectDialog *ConnectDialog1;
 	void __fastcall FormCreate(TObject *Sender);
 	void __fastcall FormClose(TObject *Sender, TCloseAction &Action);
     void __fastcall ListBox1DrawItem(TWinControl *Control, int Index,
@@ -162,10 +162,10 @@ private:	// User declarations
 
     //void xx (const String& s, int a);
     //void threadListener(const String& Message, int Status);
-
     //void showListEditor(const TParamRecord& param);
 
 
+    unsigned int _appId;
     void __fastcall OnEditParam();
     int __fastcall LoadQueryList();
     bool __fastcall Auth();         // Авторизация
@@ -198,7 +198,7 @@ private:	// User declarations
 
     bool bAdmin;            // Флаг, указывающий на то, что авторизовавшийся пользователь - администратор
     AnsiString AppPath;     // Путь к исполняемому файлу программы
-    AnsiString Username;    // Имя пользователя, авторизованного в программе
+    AnsiString _username;    // Имя пользователя, авторизованного в программе
     //double TerminateTime;   // Таймер для прерывания потока формирования отчета
     TObject *CurrentDinamicControl;    // Элемент управления для редактирования значения в списке параметров отображаемый в настоящее время
     TQueryItem* CurrentQueryItem; 	    // Текущий выбранный запрос
@@ -229,18 +229,22 @@ private:	// User declarations
 
 
 public:
-    TOdacUtilLog* OdacLog;
+    TOraLogger* OdacLog;
     double TotalTime;       // Таймер для посчета времени работы потока формирования отчета
     ThreadSelect *ts;   // Поток формирования отчета
 
 	__fastcall TForm1(TComponent* Owner);
     __fastcall ~TForm1();
 
-    void __fastcall threadListener(int Status, std::vector<String> message);
+    void __fastcall threadListener(unsigned int threadId, int Status, std::vector<String> message);
+    void __fastcall threadListener(unsigned int threadId, TThreadSelectMessage message);
+
+
+    void __fastcall showResults(std::vector<String> fileList);
     //void __fastcall threadListener(int Status, AnsiString Message = "");
     void __fastcall OnThreadChangeStatus(int Status);
     void __fastcall OnThreadError(int Status);
-    void __fastcall OnThreadSuccess(EXPORTMODE ExportMode, std::vector<String> vResultFiles);
+    //void __fastcall OnThreadSuccess(EXPORTMODE ExportMode, std::vector<String> vResultFiles);
     void __fastcall OnThreadSync(int Status);
 
 };

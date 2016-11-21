@@ -29,12 +29,22 @@ const String SYSTEM_VARIABLES_PREFIX = "$";
 const String CUSTOM_VARIABLES_PREFIX = "_";
 
 
+
+#include <assert.h>
+
+/*        #ifndef NDEBUG
+        ndebag_counter++;
+        //OutputDebugString("Now starting dangerous function");
+        //assert(1==1);
+        #endif
+  /*
 /* Сравнивает два значения
    2016-09-20 IS DEPRECATED!
 */
 String function_compare(const std::vector<String>& parameters)
 {
-    if (parameters.size() != 2) {
+    if (parameters.size() != 2)
+    {
         return "error";
     }
     return parameters[0] == parameters[1]? OleXml::TRUE_STR_VALUE : OleXml::FALSE_STR_VALUE;
@@ -70,7 +80,8 @@ String function_in(const std::vector<String>& parameters)
  */
 String function_date(const std::vector<String>& parameters)
 {
-    if (parameters.size() != 5) {
+    if (parameters.size() != 5)
+    {
         return "error";
     }
 
@@ -88,7 +99,8 @@ String function_date(const std::vector<String>& parameters)
     if (param_option_month == "1" || param_option_month == "first")
     {
         ResultDate = EncodeDate(YearOf(ResultDate), 1, DayOf(ResultDate));
-    } else if (param_option_month == "2" || param_option_month == "last")
+    }
+    else if (param_option_month == "2" || param_option_month == "last")
     {
         ResultDate = EncodeDate(YearOf(ResultDate), 12, DayOf(ResultDate));
     }
@@ -171,7 +183,8 @@ __fastcall TForm1::TForm1(TComponent* Owner)
     dangerWords.push_back("update");
     dangerWords.push_back("delete");
 
-    OdacLog = new TOdacUtilLog();
+    //TOraLogger* Logger = &TOraLogger::getInstance();
+    OdacLog = new TOraLogger(EsaleSession, "", _username, TASKNAME, AppFullVersion);
 
     AppPath = ExtractFilePath(Application->ExeName);
 }
@@ -201,11 +214,13 @@ void __fastcall TForm1::FormCreate(TObject *Sender)
     m_sessions.push_back(DBYYSession);
     m_sessions.push_back(DBWORK2Session);
 
-    if (Auth() && PrepareForm()) {
-        OdacLog->Init(EsaleSession, "", Username, TASKNAME, AppFullVersion);
-        OdacLog->WriteLog("Start application");    // Запись в Лог-таблицу
+    if (Auth() && PrepareForm())
+    {
+        OdacLog->WriteLog("START_APP");    // Запись в Лог-таблицу
         //FormResize(NULL);     // Если this->WindowState = wsMaximized
-    } else {
+    }
+    else
+    {
         Application->ShowMainForm = false;
         Application->Terminate();
     }
@@ -217,7 +232,7 @@ bool __fastcall TForm1::PrepareForm()
 {
     int result = LoadQueryList();
 
-    bAdmin = Username.UpperCase() == "ADMIN";
+    bAdmin = _username.UpperCase() == "ADMIN";
     //miExecute->Visible = bAdmin;
 
     switch (result) {
@@ -237,7 +252,13 @@ bool __fastcall TForm1::PrepareForm()
         StatusBar1->Panels->Items[0]->Text = "Готов";
 
         TabControl1->DoubleBuffered = true;
-        Form1->Caption = "Программа для отчетов " + AppFullVersion + " - " + Username;
+        Form1->Caption = "Программа для отчетов " + AppFullVersion + " - " + _username;
+
+        #ifndef NDEBUG
+        Form1->Caption = Form1->Caption + " (Debuging...)";
+        //OutputDebugString("Now starting dangerous function");
+        assert(1==1);
+        #endif
 
         return true;
     }
@@ -247,22 +268,13 @@ bool __fastcall TForm1::PrepareForm()
 // Авторизация пользователя в программе
 bool __fastcall TForm1::Auth()
 {
-    TOraSession* OraSessionAuth = new TOraSession(NULL);
-    OraSessionAuth->AssignConnect(EsaleSession);
-
     LoginForm = new TLoginForm(Application);
-    bool loggedon = LoginForm->Execute(OraSessionAuth);
-    LoginForm->Free();
+    bool loggedon = LoginForm->Execute(EsaleSession);
 
-    if (loggedon) {
-        Username =  UpperCase(Trim(OraSessionAuth->Username));
-        AddSystemVariable("username", Trim(OraSessionAuth->Username));
-        OraSessionAuth->Disconnect();
-        delete OraSessionAuth;
-        return true;
-    } else {
-        return false;
-    }
+    _username = UpperCase(LoginForm->getUsername());
+    AddSystemVariable("username", _username);
+    LoginForm->Free();
+    return loggedon;
 }
 
 //---------------------------------------------------------------------------
@@ -273,11 +285,11 @@ int __fastcall TForm1::LoadQueryList()
     AnsiString Str = "select * from ("
         " select * from ("
         " SELECT qt.*, nvl(SYS.DBA_ROLE_PRIVS.GRANTED_ROLE, null) GRANTED_ROLE, row_number() over (partition by SPR_TASK_SQL2EXCEL_ID order by queryname) N FROM " + mainSpr + " qt "
-        " LEFT join SYS.DBA_ROLE_PRIVS on GRANTEE = '" + Username + "'"
+        " LEFT join SYS.DBA_ROLE_PRIVS on GRANTEE = '" + _username + "'"
         " and upper(userlist) like '%ROLE=\"' || SYS.DBA_ROLE_PRIVS.GRANTED_ROLE || '\"%'"
         " ) where N=1"
         " )"
-        " where fvisible=1 and (upper(userlist) like '%USER=\"" + Username + "\"%' or GRANTED_ROLE is not null)"
+        " where fvisible=1 and (upper(userlist) like '%USER=\"" + _username + "\"%' or GRANTED_ROLE is not null)"
         " order by taborder,tabname,sortorder,queryname";
 
     //AnsiString Str = "SELECT * FROM spr_task_sql2excel where fvisible=1 and upper(userlist) like '%USER=\"" + Username + "\"%' order by taborder,tabname,sortorder,queryname";
@@ -538,7 +550,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                         field.width = msxml.GetAttributeValue(subnode, "width", -1);    // Ширина столбца
                         attribute = LowerCase(Trim(msxml.GetAttributeValue(subnode, "wraptext")));  // перенос по словам
                         if (attribute == "false")
-                        }
+                        {
                             field.bwraptext = 0;
                         }
                         else if (attribute == "true")
@@ -585,7 +597,9 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                 // Парсим список полей dbase4
                 std::vector<DBASEFIELD>* ListFields = &queryitem->param_dbase.Fields;
                 Variant subnode = msxml.GetFirstNode(node);
-                while (!subnode.IsEmpty())
+                // Закомментировано 2016-11-17
+                //while (!subnode.IsEmpty())
+                while ( !VarIsClear(subnode) )
                 {
                     if (msxml.GetNodeName(subnode) == "field")
                     {
@@ -684,6 +698,7 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
     }
 
     THREADOPTIONS* threadopt = new THREADOPTIONS;
+    threadopt->queryName = CurrentQueryItem->queryname;
     switch (ExportMode)
     {
         case EM_PROCEDURE: {
@@ -847,6 +862,9 @@ void __fastcall TForm1::FormClose(TObject *Sender, TCloseAction &Action)
     QueryList.clear();
     TabList.clear();
     dangerWords.clear();
+
+    OdacLog->WriteLog("CLOSE_APP");    // Запись в Лог-таблицу
+
 }
 
 /* Тестирование параметров на наличие опасных (запрещенных) значений
@@ -894,8 +912,8 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
     {
         EXPLODESTRING *item;
         item = &sqlstring[i];
-    	if (item->fBacksleshed) { 			// Замена (подстановка) параметров в строке запроса если строка является  /** параметр **/
-
+    	if (item->fBacksleshed)  			// Замена (подстановка) параметров в строке запроса если строка является  /** параметр **/
+        {
             TReplaceFlags replaceflags = TReplaceFlags() << rfReplaceAll << rfIgnoreCase;
             item->text = StringReplace(item->text, "/**", "", replaceflags);
  			item->text = StringReplace(item->text, "**/", "", replaceflags);     // Удаляем **_/
@@ -996,11 +1014,14 @@ void TForm1::InitEnvVariables()
     //OraQuery->Session = EsaleSession;
     OraQuery->SQL->Add("select * from session_roles");
     OraQuery->Open();
-    while (!OraQuery->Eof) {
+    while (!OraQuery->Eof)
+    {
         roles += "'"+OraQuery->FieldByName("role")->AsString+"'";
         OraQuery->Next();
         if (!OraQuery->Eof)
+        {
             roles += ",";
+        }
     }
     roles +="}";
     OraQuery->Close();
@@ -1021,26 +1042,30 @@ void __fastcall TForm1::AddSystemVariable(const String& name, const String& valu
     systemVariables.addVariable(SYSTEM_VARIABLES_PREFIX + name, value);
 }
 
-
 /* Обработчик событий в потоке */
-/*
-void threadListener(const String& Message, int Status)
+void __fastcall TForm1::threadListener(unsigned int threadId, TThreadSelectMessage message)
 {
-    switch (Status) {
+
+    //if ( message.getStatus() == WM_THREAD_PROCEED_BEGIN_SQL )
+    //{
+    //}
+
+    switch ( message.getStatus() ) {
         case WM_THREAD_PROCEED_BEGIN_SQL:
         {
-           Form1->Enabled = false;
-           Application->CreateForm(__classid(TForm_Wait), &Form_Wait);
-           Form_Wait->Label3->Caption = "Выполнение запроса...";
-           Form1->TotalTime = 0;
-           Form1->Timer1->Enabled = true;
-           Form_Wait->Show();
-           break;
+            OdacLog->WriteLog("START_THREAD", threadId, message.getMessage());    // Запись в Лог-таблицу
+            this->Enabled = false;
+            Application->CreateForm(__classid(TForm_Wait), &Form_Wait);
+            Form_Wait->Label3->Caption = "Выполнение запроса...";
+            TotalTime = 0;
+            Timer1->Enabled = true;
+            Form_Wait->Show();
+            break;
         }
         case WM_THREAD_PROCEED_BEGIN_FETCH:
         {
-           Form_Wait->Label3->Caption = "Извлечение данных...";
-           break;
+            Form_Wait->Label3->Caption = "Извлечение данных...";
+            break;
         }
         case WM_THREAD_PROCEED_BEGIN_DOCUMENT:
         {
@@ -1050,162 +1075,30 @@ void threadListener(const String& Message, int Status)
         case WM_THREAD_PROCEED_EXCEL:
             break;
 
-        case WM_THREAD_PROCEED_DONE:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form1->OdacLog->WriteLog("Report is prepared", Message);    // Запись в Лог-таблицу
-            Form_Wait->Release();
-            Form1->ts = NULL;
-            break;
-            // Далее выполняется OnThreadSuccess
-        }
-        case WM_THREAD_USER_CANCEL:      // Отмена пользователем
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            break;
-        }
-        case WM_THREAD_ERROR_BD_CANT_CONNECT:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "Не удалось подключиться к базе данных. \nПопробуйте выполнить запрос позднее.";
-            MessageBoxInf(msg);
-            break;
-        }
-        case WM_THREAD_ERROR_NULL_RESULTS:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "С учетом заданных параметров получено 0 строк.\nПопробуйте изменить параметры отбора.";
-            MessageBoxInf(msg);
-            break;
-        }
-        case WM_THREAD_ERROR_TOO_MORE_RESULTS:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "С учетом заданных параметров получено более 1 млн. строк.\nПопробуйте уточнить параметры отбора.";
-            MessageBoxInf(msg);
-            break;
-        }
-        case WM_THREAD_ERROR_PARAMS_INCORRECT:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "Не удалось выполнить запрос.\nПроверьте корректность параметров отбора.";
-            MessageBoxStop(msg);
-            break;
-        }
-        case WM_THREAD_ERROR_IN_PROCESS:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка в процессе обработки данных.\n" + Message;
-            MessageBoxStop(msg);
-            break;
-        }
-        case WM_THREAD_ERROR_IN_PROCESS_ALT:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = Message;
-            MessageBoxStop(msg);
-            break;
-        }
-        case WM_THREAD_ERROR_OPEN_QUERY:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка при открытии основного запроса.\n" + Message;
-            MessageBoxStop(msg);
-            break;
-        }
-        case WM_THREAD_ERROR_OPEN_QUERY2:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка при открытии вспомогательного запроса.\n" + Message;
-            MessageBoxStop(msg);
-            break;
-        }
-        case WM_THREAD_EXECUTE_DONE:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "Выполнено успешно.\n";
-            MessageBoxInf(msg);
-            break;
-
-        }
-        case WM_THREAD_EXECUTE_ERROR:
-        {
-            Form1->Enabled = true;
-            Form1->Timer1->Enabled = false;
-            Form_Wait->Release();
-            AnsiString msg = "Возникла непредвиденная ошибка в процессе выполнения запроса.\n";
-            MessageBoxStop(msg);
-            break;
-        }
-    }
-} */
-
-
-
-/* Обработчик событий в потоке */
-//void __fastcall TForm1::threadListener(int Status, AnsiString Message)
-void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
-{
-    switch (Status) {
-        case WM_THREAD_PROCEED_BEGIN_SQL:
-        {
-           this->Enabled = false;
-           Application->CreateForm(__classid(TForm_Wait), &Form_Wait);
-           Form_Wait->Label3->Caption = "Выполнение запроса...";
-           TotalTime = 0;
-           Timer1->Enabled = true;
-           Form_Wait->Show();
-           break;
-        }
-        case WM_THREAD_PROCEED_BEGIN_FETCH:
-        {
-           Form_Wait->Label3->Caption = "Извлечение данных...";
-           break;
-        }
-        case WM_THREAD_PROCEED_BEGIN_DOCUMENT:
-        {
-            Form_Wait->Label3->Caption = "Создание документа...";
-            break;
-        }
-        case WM_THREAD_PROCEED_EXCEL:
-            break;
-
-        case WM_THREAD_PROCEED_DONE:
+        case WM_THREAD_COMPLETED_SUCCESSFULLY:
         {
             this->Enabled = true;
             Timer1->Enabled = false;
-            OdacLog->WriteLog("Report is prepared", message[0]);    // Запись в Лог-таблицу
+
+            OdacLog->WriteLog("STOP_THREAD", threadId, message.getMessage());    // Запись в Лог-таблицу
+            if (message.getFiles().size() > 0)
+            {
+                showResults(message.getFiles());
+            }
+
             Form_Wait->Release();
             ts = NULL;
             break;
             // Далее выполняется OnThreadSuccess
         }
+
+
         case WM_THREAD_USER_CANCEL:      // Отмена пользователем
         {
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD", threadId, message.getMessage());    // Запись в Лог-таблицу
             break;
         }
         case WM_THREAD_ERROR_BD_CANT_CONNECT:
@@ -1213,6 +1106,7 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
             AnsiString msg = "Не удалось подключиться к базе данных. \nПопробуйте выполнить запрос позднее.";
             MessageBoxInf(msg);
             break;
@@ -1222,6 +1116,7 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
             AnsiString msg = "С учетом заданных параметров получено 0 строк.\nПопробуйте изменить параметры отбора.";
             MessageBoxInf(msg);
             break;
@@ -1231,6 +1126,7 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
             AnsiString msg = "С учетом заданных параметров получено более 1 млн. строк.\nПопробуйте уточнить параметры отбора.";
             MessageBoxInf(msg);
             break;
@@ -1240,6 +1136,7 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
             AnsiString msg = "Не удалось выполнить запрос.\nПроверьте корректность параметров отбора.";
             MessageBoxStop(msg);
             break;
@@ -1249,7 +1146,8 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка в процессе обработки данных.\n" + message[0];
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
+            AnsiString msg = "Возникла ошибка в процессе обработки данных.\n" + message.getMessage();
             MessageBoxStop(msg);
             break;
         }
@@ -1258,7 +1156,8 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = message[0];
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
+            AnsiString msg = message.getMessage();
             MessageBoxStop(msg);
             break;
         }
@@ -1267,7 +1166,8 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка при открытии основного запроса.\n" + message[0];
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
+            AnsiString msg = "Возникла ошибка при открытии основного запроса.\n" + message.getMessage();
             MessageBoxStop(msg);
             break;
         }
@@ -1276,7 +1176,8 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
-            AnsiString msg = "Возникла ошибка при открытии вспомогательного запроса.\n" + message[0];
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
+            AnsiString msg = "Возникла ошибка при открытии вспомогательного запроса.\n" + message.getMessage();
             MessageBoxStop(msg);
             break;
         }
@@ -1285,6 +1186,7 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD", threadId, message.getMessage());    // Запись в Лог-таблицу
             AnsiString msg = "Выполнено успешно.\n";
             MessageBoxInf(msg);
             break;
@@ -1295,16 +1197,54 @@ void __fastcall TForm1::threadListener(int Status, std::vector<String> message)
             this->Enabled = true;
             Timer1->Enabled = false;
             Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
             AnsiString msg = "Возникла непредвиденная ошибка в процессе выполнения запроса.\n";
             MessageBoxStop(msg);
             break;
+        }
+    }
+
+}
+
+//---------------------------------------------------------------------------
+// Обработчик завершения потока
+void __fastcall TForm1::showResults(std::vector<String> fileList)
+{
+    std::vector<String>::size_type n = fileList.size();
+    if (n == 0)
+    {
+        return;
+    }
+    else
+    {
+        String s = "";
+        int MaxOut = 5;         // ПРОВЕРИТЬ!!!!!!!!!!!!!!!!!!!!
+        int nOut = n > MaxOut ? MaxOut : n;
+        for (int i = 0; i < nOut; i++)     // Выводим имена только первых MaxOut файлов
+        {
+            s += "\n" + fileList[i] ;
+        }
+        if (n > MaxOut)
+        {
+            s += "\n...";       // Если файлов > MaxOut
+        }
+
+        AnsiString filepath = ExtractFilePath(fileList[0]);
+        MessageBoxInf("Результат сохранен в каталоге " + filepath +
+            "\nФайлы (" + IntToStr(n) + " шт.):" + s);
+        try
+        {
+            ExploreFile(this->Handle, fileList[0]);
+        }
+        catch (...)
+        {
         }
     }
 }
 
 //---------------------------------------------------------------------------
 // Обработчик завершения потока
-void __fastcall TForm1::OnThreadSuccess(EXPORTMODE ExportMode, std::vector<String> vResultFiles)
+/*void __fastcall TForm1::OnThreadSuccess(EXPORTMODE ExportMode, std::vector<String> vResultFiles)
 {
     switch (ExportMode) {
     case EM_EXCEL_TEMPLATE:
@@ -1335,7 +1275,7 @@ void __fastcall TForm1::OnThreadSuccess(EXPORTMODE ExportMode, std::vector<Strin
         }
         if (n > MaxOut)
             s += "\n...";       // Если файлов > MaxOut
-            
+
         AnsiString filepath = ExtractFilePath(vResultFiles[0]);
         MessageBoxInf("Результат сохранен в каталоге " + filepath +
             "\nФайлы (" + IntToStr(n) + " шт.):" + s);
@@ -1345,7 +1285,7 @@ void __fastcall TForm1::OnThreadSuccess(EXPORTMODE ExportMode, std::vector<Strin
         }
         break;
      }
-}
+}*/
 
 //---------------------------------------------------------------------------
 //
@@ -2162,7 +2102,9 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
         return;
     }
 
-    OdacLog->WriteLog("Execute query", CurrentQueryItem->queryname);    // Запись в Лог-таблицу
+
+    // Закомментировано 2016-11-18
+    //OdacLog->WriteLog("Execute query", CurrentQueryItem->queryname);    // Запись в Лог-таблицу
 
     // ФОРМИРОВАНИЕ СТРОКИ ЗАПРОСА
     AnsiString querytext;

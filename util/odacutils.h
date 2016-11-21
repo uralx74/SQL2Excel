@@ -23,73 +23,8 @@
 #ifndef ODACUTILS_H
 #define ODACUTILS_H
 
-//#include <vector.h>
-//#include <classes.hpp>
-//#include <MemDS.hpp>
 #include "Ora.hpp"
 
-
-using namespace std;
-
-//------------------------------------------------------------------------------
-// 
-class TOdacUtilLog
-{
-private:
-    AnsiString s_os_mac_address;
-    AnsiString s_os_user_name;
-    AnsiString s_task_user_name;
-    AnsiString s_task_name;
-    AnsiString s_app_ver;
-    TOraSession* OraSession;
-
-protected:
-
-public:
-    void __fastcall Init(TOraSession* OraSession, AnsiString s_os_mac_address, AnsiString s_task_user_name, AnsiString s_task_name, AnsiString s_app_ver);
-    BOOL WriteLog(AnsiString sFuncName, AnsiString descr="");
-};
-
-//------------------------------------------------------------------------------
-// Инициализация параметров для записи в лог-таблицу
-void __fastcall TOdacUtilLog::Init(TOraSession* OraSession, AnsiString s_os_mac_address, AnsiString s_task_user_name, AnsiString s_task_name, AnsiString s_app_ver)
-{
-    this->OraSession = OraSession;
-    this->s_os_mac_address = s_os_mac_address;
-    this->s_task_user_name = s_task_user_name;
-    this->s_task_name = s_task_name;
-    this->s_app_ver = s_app_ver;
-}
-
-//------------------------------------------------------------------------------
-// Записывает в таблицу БД лог-строку
-BOOL TOdacUtilLog::WriteLog(AnsiString sFuncName, AnsiString descr)
-{
-
-	TOraQuery *OraQueryLog = new TOraQuery(NULL);
-    OraQueryLog->Session = OraSession;
-    try {
-    	OraQueryLog->SQL->Clear();
- 	    OraQueryLog->CreateProcCall("pk_nasel_otdel.p_log_task_write_2", 0);
-        OraQueryLog->ParamByName("p_pc_mac")->Value = s_os_mac_address;
-        OraQueryLog->ParamByName("p_task_name")->Value = s_task_name;
-        OraQueryLog->ParamByName("p_func_name")->Value = sFuncName;
-        OraQueryLog->ParamByName("p_descr")->Value = descr;
-        OraQueryLog->ParamByName("p_task_user_name")->Value = s_task_user_name;
-        OraQueryLog->ParamByName("p_app_ver")->Value = s_app_ver;
-        OraQueryLog->ExecSQL();
-        OraQueryLog->Close();
-    } catch (...) {
-        delete OraQueryLog;
-    	OraQueryLog = NULL;
-        return false;
-    }
-
-    delete OraQueryLog;
-	OraQueryLog = NULL;
-
-    return true;
-}
 
 //------------------------------------------------------------------------------
 //  Подсчет количества записей
@@ -98,7 +33,7 @@ int GetRecCount(TOraQuery *OraQuery)
 
     TOraQuery *OraQueryCount = new TOraQuery(NULL);//OraQuery->Last();
     OraQueryCount->Session = OraQuery->Session;
-    OraQuery->SQL->Add( "select count(*) N from (" +OraQuery->FinalSQL + ")" );
+    OraQuery->SQL->Add( "select count(*) N from (" + OraQuery->FinalSQL + ")" );
     OraQueryCount->Open();
     int RecCount = OraQueryCount->FieldByName("N")->AsInteger;
 
@@ -120,12 +55,19 @@ TOraQuery* OpenOraQuery(TOraSession* OraSession, AnsiString StrQuery, bool Fetch
     //OraQuery->SQL->Clear();
     OraQuery->SQL->Add(StrQuery);
 
-    try {
+    try
+    {
         if (OraQuery->Active)
+        {
             OraQuery->Refresh();
+        }
         else
+        {
             OraQuery->Open();
-    } catch(Exception &e) {
+        }
+    }
+    catch(Exception &e)
+    {
         delete OraQuery;
         OraQuery = NULL;
         //Application->ShowException(&exception);

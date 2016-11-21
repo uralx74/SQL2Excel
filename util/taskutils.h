@@ -312,18 +312,24 @@ std::vector<AnsiString> Explode(AnsiString str, AnsiString separator, bool addEm
     int nLengthSep = separator.Length();
 
  	found2 = PosEx(separator,str, 1);
- 	while(found2 > 0) {
- 		if(found2 > 0 || addEmpty){
-            if (found2 > 0) {
+ 	while(found2 > 0)
+    {
+ 		if(found2 > 0 || addEmpty)
+        {
+            if (found2 > 0)
+            {
  			    results.push_back(str.SubString(found1, found2-found1));
                  //ss =  str.SubString(found1, found2-found1);
             }
 		}
         found1 = found2 + nLengthSep;
         if (found2 !=0)
+        {
  		    found2 = PosEx(separator, str, found1);
+        }
  	}
- 	if(str.Length() > 0 || addEmpty){
+ 	if(str.Length() > 0 || addEmpty)
+    {
         results.push_back(str.SubString(found1, str.Length()-found1+1));
         //ss =  str.SubString(found1, str.Length()-found1+1);
  		// results.push_back(str);   // Закомментированно перед отпуском 30.06.2015! Нужно дополнительно протестировать

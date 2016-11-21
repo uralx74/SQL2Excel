@@ -1,6 +1,5 @@
 #include "MSWordWorks.h"
 
-
 //---------------------------------------------------------------------------
 //
 MergeTable::MergeTable()
@@ -15,9 +14,12 @@ MergeTable::MergeTable()
 // Усечение (на самом деле лишь меняет значение RecCount)
 void __fastcall MergeTable::ShrinkRecords(int RecCount)
 {
-    if (RecCount <0) {
+    if (RecCount <0)
+    {
         this->RecCount = CurrentRecordIndex - 1;
-    } else {
+    }
+    else
+    {
         this->RecCount = RecCount;
     }
 }
@@ -112,10 +114,10 @@ Variant __fastcall MSWordWorks::OpenWord()
 
         randomize();
         AnsiString OldTitle = WordApp.OlePropertyGet("Caption");
-        AnsiString TempTitle = "Temp - " + IntToStr(random(1000000));
-        WordApp.OlePropertySet("Caption", TempTitle);
+        String TempTitle = "Temp - " + IntToStr(random(1000000));
+        WordApp.OlePropertySet("Caption", TempTitle.c_str());
         Handle = FindWindow("OpusApp", TempTitle.c_str());
-        WordApp.OlePropertySet("Caption", OldTitle);
+        WordApp.OlePropertySet("Caption", OldTitle.c_str());
 
         // Отключить режим показа предупреждений.
         WordApp.OlePropertySet("DisplayAlerts", false);
@@ -169,18 +171,23 @@ Variant __fastcall MSWordWorks::OpenWord(const String &DocumentFileName, bool fA
 	  	Documents = WordApp.OlePropertyGet("Documents");
 
         // Выбор документа из файла
-        if (fAsTemplate) {
+        if (fAsTemplate)
+        {
         	// Каждый вновь создаваемый документ получает индекс Item = 1
         	Documents.OleProcedure("Add", DocumentFileName, false,0);
         	Document = Documents.OleFunction("Item",1); // Доступ к документу
-        } else {
+        }
+        else
+        {
         	Document = Documents.OleFunction("Open", DocumentFileName);
         }
         return Document;
     } catch (Exception &e) {
         try {
             if (!VarIsEmpty(Document))     // Если шаблон открыт
+            {
                 CloseDocument(Document);
+            }
         } catch(...) {}
         try {
            CloseApplication();
@@ -203,7 +210,7 @@ Variant __fastcall MSWordWorks::OpenDocument(const String &DocumentFileName, boo
     } else {
         // Создается новый документ, если открываемый документ - шаблон
     	// Каждый вновь создаваемый документ получает индекс Item = 1
-    	Documents.OleProcedure("Add", DocumentFileName, false,0);
+    	Documents.OleProcedure("Add", DocumentFileName.c_str(), false,0);
     	Document = Documents.OleFunction("Item",1); // Доступ к документу
     }
     return Document;
@@ -369,7 +376,7 @@ Variant __fastcall MSWordWorks::SetPictureToField(Variant Document, String Field
         Variant Field = Document.OlePropertyGet("FormFields").OleFunction("Item", (OleVariant)FieldName);
         Variant InlineShapes = Field.OlePropertyGet("Range").OlePropertyGet("InlineShapes");
 
-        InlineShapes.OleProcedure("AddPicture", PictureFileName, false, true);
+        InlineShapes.OleProcedure("AddPicture", PictureFileName.c_str(), false, true);
         Variant InlineShape = InlineShapes.OleFunction("Item", 1);
 
         // Не проверено!
@@ -404,10 +411,10 @@ void __fastcall MSWordWorks::FindTextForReplace(Variant document, String Text, S
 
         // Поиск текста по всему документу
 		Variant Find = Selection.OlePropertyGet("Find");
-        Find.OleProcedure("Execute", Text/*Текст, который будем менять*/, fReg/*учитывать регистрe*/,
+        Find.OleProcedure("Execute", Text.c_str()/*Текст, который будем менять*/, fReg/*учитывать регистрe*/,
         	false/*Только полное слово*/,false/*Учитывать универсальные символы*/,false/*Флажок Произносится как*/,
         	false/*Флажок Все словоформы*/,true/*Искать вперед*/,1/*Активация кнопки Найти далее*/,
-        	false/* Задание формата */, ReplaceText/*На что заменить*/,2/*Заменить все*/);   // Этот вариант работает
+        	false/* Задание формата */, ReplaceText.c_str()/*На что заменить*/,2/*Заменить все*/);   // Этот вариант работает
 
         /*
         Find.OleProcedure("ClearFormatting");                                         // Этот вариант НЕ работает, надо разбираться
@@ -598,10 +605,13 @@ std::vector<String> __fastcall MSWordWorks::MergeDocumentToFiles(Variant Templat
     //md.TemplateDocument = OpenWord(md.TemplateFileName, true);
 
     int nFiles;
-    if (md.PagePerDocument <= 0) {          // Расчитываем кол-во результирующих файлов
+    if (md.PagePerDocument <= 0)          // Расчитываем кол-во результирующих файлов
+    {
         md.PagePerDocument = md.RecCount;
         nFiles = 1;
-    } else {
+    }
+    else
+    {
         nFiles = ceil((double)md.RecCount/(double)md.PagePerDocument);
     }
 
@@ -611,14 +621,15 @@ std::vector<String> __fastcall MSWordWorks::MergeDocumentToFiles(Variant Templat
     vFiles.reserve(nFiles);
 
     int FileIndex = 0;
-    for (int i = 1; i <= md.RecCount; i = i + md.PagePerDocument) {
+    for (int i = 1; i <= md.RecCount; i = i + md.PagePerDocument)
+    {
         FileIndex++;
         AnsiString filename = md.ResultFileNamePrefix + str_pad(IntToStr(FileIndex), nPad, "0", STR_PAD_LEFT) + ".doc";
         Variant ResultDocument = MergeDocument(TemplateDocument, md, i);
 
         // Сохраняем документ, без помещения его в список последних файлов (AddToRecentFiles = false - 6й параметр)
         try {
-            ResultDocument.OleProcedure("SaveAs", filename, 0, false, "", false);
+            ResultDocument.OleProcedure("SaveAs", filename.c_str(), 0, false, "", false);
         } catch (Exception &e) {
             throw Exception("Ошибка при сохранении в файл\n" + filename);
 
@@ -655,10 +666,14 @@ Variant __fastcall MSWordWorks::MergeDocument(Variant TemplateDocument, MERGETAB
     int LastRecordIndex;
 
     if (StartIndex <= 0 )
+    {
         StartIndex = 1;
+    }
     int PagesCount = StartIndex + md.PagePerDocument-1;
     if (PagesCount > md.RecCount)
+    {
         PagesCount = md.RecCount;
+    }
 
 
     ofstream out(TmpFileName.c_str());
@@ -971,6 +986,10 @@ Variant __fastcall MSWordWorks::MergeDocumentFromFile(Variant TemplateDocument, 
 // Слияние из готового файла с данными (html)
 std::vector<String> MSWordWorks::ExportToWordFields(TOraQuery* QTable, Variant Document, String Path, String Prefix, int PagePerDocument)
 {
+    #ifndef NDEBUG
+    int ndebag_counter = 1;
+    #endif
+
     try {
         Variant vFields = Document.OlePropertyGet("MailMerge").OlePropertyGet("Fields");
         int FieldCount = vFields.OlePropertyGet("Count");
@@ -1003,7 +1022,9 @@ std::vector<String> MSWordWorks::ExportToWordFields(TOraQuery* QTable, Variant D
             String FieldName = Text.SubString(SepPos+1, Text.Length()-SepPos).Trim();
             SepPos = FieldName.Pos(" ");
             if (SepPos == 0)
+            {
                 SepPos = FieldName.Length();
+            }
             FieldName = FieldName.SubString(1,SepPos).Trim();
 
             // Удаляем поля MergeField из документа, если аналогичного поля нет в источнике
