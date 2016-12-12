@@ -273,7 +273,7 @@ bool __fastcall TForm1::Auth()
 
     _username = UpperCase(LoginForm->getUsername());
     AddSystemVariable("username", _username);
-    LoginForm->Free();
+    delete LoginForm;
     return loggedon;
 }
 

@@ -7,11 +7,9 @@
 #include <StdCtrls.hpp>
 #include <Forms.hpp>
 #include <ComCtrls.hpp>
-//#include "MemDS.hpp"
 #include "Ora.hpp"
 #include "..\util\OleXml.h"
 #include "..\util\taskutils.h"
-//#include "..\util\odacutils.h"
 #include "..\util\formlogin\formlogin.h"
 #include "..\util\appver.h"
 #include "..\util\CommandLine.h"
@@ -43,7 +41,7 @@
 #include <DB.hpp>
 #include "MemDS.hpp"
 #include "EditAlt.h"
-#include "OraLogger.h"
+#include "..\util\OraLogger\OraLogger.h"
 
 class LvParameter: public Parameter
 {

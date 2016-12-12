@@ -13,8 +13,8 @@
 #include "QueryItem.h"
 #include "Parameter.h"
 #include "..\util\odacutils.h"
-#include "..\MSExcelWorks.h"
-#include "..\MSWordWorks.h"
+#include "..\util\MSExcelWorks.h"
+#include "..\util\MSWordWorks.h"
 
 
 class TThreadSelectMessage

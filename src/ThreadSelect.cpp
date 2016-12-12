@@ -942,7 +942,8 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
     }
 
     // Сначала делаем замену полей
-    try {
+    try
+    {
         if (QueryFields != NULL)
         {
             msexcel.ExportToExcelFields(QueryFields, Worksheet);
@@ -963,7 +964,8 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
         {
             msexcel.ExportToExcelTable(QueryTable, Worksheet, param_excel.table_range_name, param_excel.fUnbounded);
         }
-    } catch (Exception &e)
+    }
+    catch (Exception &e)
     {
         try {
             msexcel.CloseApplication();
