@@ -294,7 +294,7 @@ TParamRecord* TParamRecord::createDefault(const OleXml &xml, Variant node)
     }
 
     // deleteif  - удалять блок /**...**/ если флаг = true
-    if (!xml.GetAttribute(node, "deleteif").IsEmpty())
+    if (! VarIsClear(xml.GetAttribute(node, "deleteif")) )
     {// Если в xml отсутствует параметр value
         deleteifflg = true;
         deleteifvalue = xml.GetAttributeValue(node, "deleteif").UpperCase();
@@ -364,17 +364,15 @@ TListParameter::TListParameter(const OleXml &xml, Variant node) :
 
     // Если в опциях list-a отсутствует параметр value
     // то value будет равно первому значению из списка
-    bool bParamValueExist = !xml.GetAttribute(node, "value").IsEmpty();
+    bool bParamValueExist = !VarIsClear( xml.GetAttribute(node, "value") );
 
     // Если в списке значений компонента list отсутствует параметр value
     // то проставляем значение value для каждого item-a
-    bool bValueAutoInc = xml.GetAttribute(subnode, "value").IsEmpty();
+    bool bValueAutoInc = VarIsClear( xml.GetAttribute(subnode, "value") );
     int i = 0;
 
     // Заполняем список элементов
     // в список попадают и невидимые (скрытые) элементы
-    // Закомментировано 2016-11-17
-    //while (!subnode.IsEmpty()) {
     while ( !VarIsClear(subnode) )
     {
         TParamlistItem item;
@@ -382,11 +380,16 @@ TListParameter::TListParameter(const OleXml &xml, Variant node) :
         item.result = xml.GetAttributeValue(subnode, "result", item.value);
         item.label = xml.GetAttributeValue(subnode, "label", item.value);
 
-        if (xml.GetAttribute(subnode, "visible").IsEmpty() && !xml.GetAttribute(subnode, "visibleif").IsEmpty())
+        // Если нет принудительного флага visible и есть условие видимости visibleif
+        // то вычисляем значение visibleflg используя условие visibleif
+        // иначе visibleflg = visible
+        if ( VarIsClear(xml.GetAttribute(subnode, "visible")) && !VarIsClear(xml.GetAttribute(subnode, "visibleif")) )
         {
             item.visibleif = Trim(LowerCase(xml.GetAttributeValue(subnode, "visibleif")));
             item.visibleflg = calculate(item.visibleif) ==  OleXml::TRUE_STR_VALUE;
-        } else {
+        }
+        else
+        {
             item.visible = Trim(LowerCase(xml.GetAttributeValue(subnode, "visible", OleXml::TRUE_STR_VALUE)));
             item.visibleflg = item.visible == OleXml::TRUE_STR_VALUE;
         }

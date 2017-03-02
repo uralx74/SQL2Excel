@@ -216,37 +216,49 @@ void __fastcall TForm1::FormCreate(TObject *Sender)
     m_sessions.push_back(DBYYSession);
     m_sessions.push_back(DBWORK2Session);
 
-    if (Auth() && PrepareForm())
+    bool isAuthSuccess = Auth();
+    bool isReadyForWork = false;
+
+    if (isAuthSuccess)
     {
         OdacLog->WriteLog("START_APP");    // Запись в Лог-таблицу
         //FormResize(NULL);     // Если this->WindowState = wsMaximized
         InitSystemVariables();  // Инициализируем системные переменные
         InitCustomVariables();  // Инициализируем переменные среды
+        isReadyForWork = PrepareForm();
     }
-    else
+
+    if (!isAuthSuccess || !isReadyForWork)
     {
         Application->ShowMainForm = false;
         Application->Terminate();
     }
 }
 
-//---------------------------------------------------------------------------
-// Подготовка элементов управления
+/* Подготовка элементов управления
+   Загружает список запросов в память и инициализирует оконные элементы управления
+*/ 
 bool __fastcall TForm1::PrepareForm()
 {
-    int result = LoadQueryList();
+    int result = LoadQueryList();   // Загрузка списка запросов
 
     bAdmin = _username.UpperCase() == "ADMIN";
     //miExecute->Visible = bAdmin;
 
-    switch (result) {
+    switch (result)
+    {
     case -2:
+    {
 		MessageBoxStop("Отсутствуют доступные для текущего пользователя запросы. Программа будет закрыта!");
         return false;
+    }
     case -1:
-	    MessageBoxStop("Не удалось открыть таблицу справочника запросов. Программа будет закрыта!");
+	{
+        MessageBoxStop("Не удалось открыть таблицу справочника запросов. Программа будет закрыта!");
         return false;
+    }
     default:
+    {
         PrepareTabs();
         FillFieldsLB();
         FillParametersLV();
@@ -265,6 +277,7 @@ bool __fastcall TForm1::PrepareForm()
         #endif
 
         return true;
+    }
     }
 }
 
@@ -301,14 +314,16 @@ int __fastcall TForm1::LoadQueryList()
 
     TOraQuery *OraQuery_SprTask = OpenOraQuery(EsaleSession, Str);
 
-    if (OraQuery_SprTask == NULL) {
+    if (OraQuery_SprTask == NULL)
+    {
         delete OraQuery_SprTask;
         return -1;
     }
 
 
     int RecCount = OraQuery_SprTask->RecordCount;
-    if (RecCount <= 0) {
+    if (RecCount <= 0)
+    {
         delete OraQuery_SprTask;
         return -2;
     }
@@ -328,7 +343,8 @@ int __fastcall TForm1::LoadQueryList()
 int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list)
 {
     int RecCount = oraquery->RecordCount;
-    if (RecCount <= 0) {
+    if (RecCount <= 0)
+    {
         return NULL;
     }
 
