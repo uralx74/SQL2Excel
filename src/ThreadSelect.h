@@ -15,6 +15,8 @@
 #include "..\util\odacutils.h"
 #include "..\util\MSExcelWorks.h"
 #include "..\util\MSWordWorks.h"
+#include "taskutils.h"
+#include "DocumentWriter.h"
 
 
 class TThreadSelectMessage
@@ -91,19 +93,24 @@ typedef struct {
 
 
 //---------------------------------------------------------------------------
-class ThreadSelect : public TThread
+class TThreadSelect : public TThread
 {
 public:
     //__fastcall ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt, void (*f)(const String&, int));
-    __fastcall ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt);
-    __fastcall ~ThreadSelect();
+    __fastcall TThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt);
+    __fastcall ~TThreadSelect();
     TOraSession* __fastcall CreateOraSession(TOraSession* TemplateOraSession);
 
     void __fastcall SyncThreadChangeStatus();
 
 private:
     HWND ParentFormHandle;
-    AnsiString AppPath;     // Путь к приложению
+    //AnsiString AppPath;     // Путь к приложению
+    TDocumentWriter documentWriter;
+
+    void DoExportToWordTemplate();   //
+
+
 
     EXPORTMODE ExportMode;
     AnsiString DstFileName;             // Имя файла-назначения
@@ -133,7 +140,7 @@ private:
     void __fastcall ExportToExcel(TOraQuery *OraQuery); // Заполнение отчета Excel
     void __fastcall ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields);
     void __fastcall ExportToDBF(TOraQuery *OraQuery);   // Заполнение DBF-файла
-    void __fastcall ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields);  // Заполнение отчета Word на базе шаблона
+    //void __fastcall ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields);  // Заполнение отчета Word на базе шаблона
     void __fastcall setStatus(_TThreadStatus status, const AnsiString& message = "");
 
     void (*f)(const String&, int);

@@ -10,7 +10,6 @@
 #include "Ora.hpp"
 #include "..\util\OleXml.h"
 #include "..\util\taskutils.h"
-#include "..\util\formlogin\formlogin.h"
 #include "..\util\appver.h"
 #include "..\util\CommandLine.h"
 #include <ExtCtrls.hpp>
@@ -24,14 +23,11 @@
 #include "FShowQuery.h"
 #include "OdacVcl.hpp"
 //#include <inifiles.hpp>
-
 #include <ADODB.hpp>
 #include "VirtualTable.hpp"
-//#include "Halcn6DB.hpp"
 #include <Dialogs.hpp>
 #include <ImgList.hpp>
 #include <Mask.hpp>
-
 #include "parameter.h"
 #include "variables.h"
 #include "ParameterizedText.h"
@@ -42,6 +38,9 @@
 #include "MemDS.hpp"
 #include "EditAlt.h"
 #include "..\util\OraLogger\OraLogger.h"
+#include "DateUtils.hpp"
+#include "taskutils.h"
+#include "formlogin.h"
 
 class LvParameter: public Parameter
 {
@@ -113,13 +112,14 @@ __published:	// IDE-managed Components
     TAction *ActionExportDbfFile;
     TAction *ActionShowSecondaryQuery;
     TMaskEdit *MaskEdit1;
-    TEdit *NumEdit1;
+    TEdit *NumEdit1_old;
     TAction *ActionExportExcelBlank;
     TMenuItem *ActionExportExcelMemory1;
     TMenuItem *N9;
     TAction *ActionAsProcedure;
     TAction *ActionApplictionExit;
     TAction *ActionShowEnvironment;
+    TEditAlt *NumEdit1;
 	void __fastcall FormCreate(TObject *Sender);
 	void __fastcall FormClose(TObject *Sender, TCloseAction &Action);
     void __fastcall ListBox1DrawItem(TWinControl *Control, int Index,
@@ -149,8 +149,8 @@ __published:	// IDE-managed Components
           TShiftState Shift, int X, int Y);
     void __fastcall ListBox1Click(TObject *Sender);
     void __fastcall ActionShowSecondaryQueryExecute(TObject *Sender);
-    void __fastcall NumEdit1Change(TObject *Sender);
-    void __fastcall NumEdit1KeyPress(TObject *Sender, char &Key);
+    void __fastcall NumEdit1_oldChange(TObject *Sender);
+    void __fastcall NumEdit1_oldKeyPress(TObject *Sender, char &Key);
     void __fastcall ActionDefaultRunExecute(TObject *Sender);
     void __fastcall ActionExportExcelBlankExecute(TObject *Sender);
     void __fastcall ActionAsProcedureExecute(TObject *Sender);
@@ -186,7 +186,8 @@ private:	// User declarations
     void __fastcall Run(EXPORTMODE ExportMode, int Tag = 0);
 
     bool CheckCondition(AnsiString condition);
-    void InitEnvVariables(); // Инициализации переменных среды
+    void InitSystemVariables(); // Инициализация системных переменных
+    void InitCustomVariables(); // Инициализация переменных среды
 
     int __fastcall DataSetToQueryList(TOraQuery* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list);
     TColor __fastcall ColorByIndex(int index);     // Возвращает цвет по индексу
@@ -229,7 +230,7 @@ private:	// User declarations
 public:
     TOraLogger* OdacLog;
     double TotalTime;       // Таймер для посчета времени работы потока формирования отчета
-    ThreadSelect *ts;   // Поток формирования отчета
+    TThreadSelect *ts;   // Поток формирования отчета
 
 	__fastcall TForm1(TComponent* Owner);
     __fastcall ~TForm1();

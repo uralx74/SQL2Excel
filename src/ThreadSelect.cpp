@@ -11,12 +11,13 @@
 #include "Dbf_Lang.hpp"
 
 
+using namespace tasktools;
 
-unsigned int ThreadSelect::_threadIndex = 0;
+unsigned int TThreadSelect::_threadIndex = 0;
 
 /**/
 //__fastcall ThreadSelect::ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt, void (*f)(const String&, int))
-__fastcall ThreadSelect::ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt)
+__fastcall TThreadSelect::TThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt)
     : TThread(CreateSuspended),
     _threadMessage("")
 {
@@ -24,17 +25,20 @@ __fastcall ThreadSelect::ThreadSelect(bool CreateSuspended, THREADOPTIONS* threa
     Suspended = true;
     //WParamResultMessage = 0;
     //LParamResultMessage = 0;
-    AppPath = ExtractFilePath(Application->ExeName);
+    //AppPath = ExtractFilePath(Application->ExeName);
 
     SetThreadOpt(threadopt);
     _threadIndex++;
 
     randomize();
     _threadId = random(9999999999);
+
+    //documentWriter = new TDocumentWriter();
+
 }
 
 /**/
-__fastcall ThreadSelect::~ThreadSelect()
+__fastcall TThreadSelect::~TThreadSelect()
 {
     if (ThreadOraSession != NULL)
     {
@@ -60,7 +64,7 @@ __fastcall ThreadSelect::~ThreadSelect()
 }
 
 /* Установка параметров для выполнения запроса и подготовки отчета */
-void ThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
+void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
 {
     //m_th_opt = *threadopt;
     this->ParentFormHandle = threadopt->ParentFormHandle;   // Handle главной формы
@@ -126,7 +130,7 @@ void ThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
 
 //---------------------------------------------------------------------------
 //
-TOraSession* __fastcall ThreadSelect::CreateOraSession(TOraSession* TemplateOraSession)
+TOraSession* __fastcall TThreadSelect::CreateOraSession(TOraSession* TemplateOraSession)
 {
     TOraSession* OraSession = new TOraSession(NULL);
     //ThreadOraSession->OnError = OraSession1Error;
@@ -177,7 +181,7 @@ TOraSession* __fastcall ThreadSelect::CreateOraSession(TOraSession* TemplateOraS
 }
 
 //---------------------------------------------------------------------------
-void __fastcall ThreadSelect::Execute()
+void __fastcall TThreadSelect::Execute()
 {
     if (!ThreadOraSession->Connected)
     {
@@ -312,10 +316,14 @@ void __fastcall ThreadSelect::Execute()
 
             switch (ExportMode) {
             case EM_EXCEL_TEMPLATE:
+                CoInitialize(NULL);
                 ExportToExcelTemplate(OraQueryMain, OraQuerySecondary);
+                CoUninitialize();
                 break;
             case EM_EXCEL_BLANK:
+                CoInitialize(NULL);
                 ExportToExcel(OraQueryMain);
+                CoUninitialize();
                 break;
             //case EM_EXCEL_FILE_TEMPLATE:
             //    break;
@@ -327,12 +335,15 @@ void __fastcall ThreadSelect::Execute()
                 ExportToDBF(OraQueryMain);
                 break;
             case EM_WORD_TEMPLATE:
-                ExportToWordTemplate(OraQueryMain, OraQuerySecondary);
+                CoInitialize(NULL);
+                DoExportToWordTemplate();
+                CoUninitialize();
                 break;
             }
         }
         catch ( Exception& e )
         {
+            CoUninitialize();
             setStatus(WM_THREAD_ERROR_IN_PROCESS, e.Message);
             this->Terminate();
         }
@@ -377,6 +388,63 @@ void __fastcall ThreadSelect::Execute()
     Synchronize(SyncThreadChangeStatus);
 }
 
+/* Процедура экспорта в шаблон Word
+   Примечание: Следует перенести в отдельный модуль */
+void TThreadSelect::DoExportToWordTemplate()
+{
+    if ( OraQueryMain->RecordCount == 0)
+    {
+        return;
+    }
+
+    TWordExportParams wordExportParams;
+    wordExportParams.pagePerDocument = param_word.page_per_doc;
+
+    /* Присоединяем источники данных */
+    wordExportParams.addFormtextDataSet(OraQuerySecondary);     // Общая информация по участку
+    //wordExportParams.addSingleTextDataSet(OraQuerySecondary, "rec_");  // Информация по реестру
+    wordExportParams.addMergeDataSet(OraQueryMain);
+    wordExportParams.templateFilename =  param_word.template_name;
+
+
+    bool bFilterExist = param_word.filter_main_field != "" && param_word.filter_sec_field != "";    // Если в параметрах задан фильтр, то считаем, что установлен фильтр
+
+    if ( bFilterExist ) // Если задан фильтр
+    {
+        int i = 1;
+        while( !OraQuerySecondary->Eof )
+        {
+            // Если задан фильтр, применяем его к основному запросу
+            try
+            {
+                String sFilter = param_word.filter_main_field + "='" + OraQuerySecondary->FieldByName(param_word.filter_sec_field)->AsString + "'";
+                OraQueryMain->Filtered = false;
+                OraQueryMain->Filter = sFilter;
+                OraQueryMain->Filtered = true;
+            }
+            catch ( Exception &e )
+            {
+                OraQueryMain->Filtered = false;
+                _threadStatus = WM_THREAD_ERROR_IN_PROCESS;
+                _threadMessage = "Проверьте корректность параметров фильтра в параметрах экспорта или обратитесь к системному администратору.\n" + e.Message;
+                break;
+            }
+
+            if ( OraQueryMain->RecordCount > 0 )         // Если есть записи, то формируем документ
+            {
+                wordExportParams.resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_" + IntToStr(i++)+ "_[:counter].doc";
+                documentWriter.ExportToWordTemplate(&wordExportParams);
+            }
+            OraQuerySecondary->Next();
+        }
+    }
+    else
+    {   // если фильтр не задан, делаем экпорт как есть
+        wordExportParams.resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_[:counter].doc";
+        documentWriter.ExportToWordTemplate(&wordExportParams);
+    }
+
+}
 
 TThreadSelectMessage::TThreadSelectMessage(unsigned int status, const AnsiString& message, std::vector<String> files) :
     _status(status),
@@ -391,7 +459,7 @@ TThreadSelectMessage::TThreadSelectMessage(unsigned int status, const AnsiString
 {
 }
 
-void __fastcall ThreadSelect::setStatus(_TThreadStatus status, const AnsiString& message)
+void __fastcall TThreadSelect::setStatus(_TThreadStatus status, const AnsiString& message)
 {
     _threadStatus = status;
     _threadMessage = message;
@@ -399,7 +467,7 @@ void __fastcall ThreadSelect::setStatus(_TThreadStatus status, const AnsiString&
 }
 
 /* Синхронизация - изменение статуса выполнения запроса */
-void __fastcall ThreadSelect::SyncThreadChangeStatus()
+void __fastcall TThreadSelect::SyncThreadChangeStatus()
 {
     TThreadSelectMessage message(_threadStatus, _threadMessage, _resultFiles);
     Form1->threadListener(_threadId, message);
@@ -411,9 +479,9 @@ void __fastcall ThreadSelect::SyncThreadChangeStatus()
  QueryFormFields - вспомогательный запрос, используется в качестве источника данных
  при замене полей FormFields в шаблоне MS Word. Может быть NULL.
  */
-void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields)
+/*void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields)
 {
-    CoInitialize(NULL);
+
 
     String TemplateFullName = AppPath + param_word.template_name; // Абсолютный путь к файлу-шаблону
     String SavePath = ExtractFilePath(DstFileName);         // Путь для сохранения результатов
@@ -453,13 +521,17 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
     bool bFilterExist = param_word.filter_main_field != "" && param_word.filter_sec_field != "";    // Если в параметрах задан фильтр, то считаем, что установлен фильтр
 
 
-    if (QueryFormFields == NULL) {
+    if (QueryFormFields == NULL)
+    {
         // Если задан один запрос, то делаем только слияние
         // Слияние документа Word с таблицей
-        if (QueryMerge->RecordCount > 0) {
-            _resultFiles = msword.ExportToWordFields(QueryMerge, Document, SavePath, ResultFileNamePrefix + "_", param_word.page_per_doc);
+        if (QueryMerge->RecordCount > 0)
+        {
+            _resultFiles = msword.ExportToWordFields(QueryMerge, Document, SavePath + ResultFileNamePrefix + "_[:counter].doc", param_word.page_per_doc);
         }
-    } else {
+    }
+    else
+    {
         // Если задано два запроса, то:
         // 1. если задан фильтр в цикле задаем фильтр основному запросу
         // 2. подставляем значения в FormFields-поля в шаблоне
@@ -501,13 +573,15 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
             for (int i = 0; i < FormFieldsCount ; i++)   		// Перебираем FormFields, подставляем соответствующие значения из QueryFormFields
             {
                 String FormFieldName = vFormFields[i];
-                try {
+                try
+                {
                     if ( FormFieldName.Pos("[IMG]") == 1 ) // ЗДЕСЬ ДОДЕЛАТЬ, учитывать параметры [IMG WIDTH=150 HEIGHT=200]
                     {
                         String FieldName = FormFieldName.SubString(6, FormFieldName.Length()-5);
                         String ImgPath = "";
                         TField* Field = QueryFormFields->Fields->FindField(FieldName);
-                        if (Field) {
+                        if (Field)
+                        {
                             ImgPath = AppPath + QueryFormFields->Fields->FieldByName(FieldName)->AsString;
 
 
@@ -516,7 +590,9 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
                             {
                                 msword.SetPictureToField(Document, FieldName, ImgPath);
                                 //msword.SetPictureToField(Document, FieldName, ImgPath, 80, 80);
-                            } else {
+                            }
+                            else
+                            {
                                 // Файл не найден или throw
                                 msword.SetTextToFieldF(Document, FieldName, "Файл изображения не найден! (" + ImgPath + ")");
                                 //
@@ -525,13 +601,18 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
 
                             }
                         }
-                    } else {
+                    }
+                    else
+                    {
                         TField* Field = QueryFormFields->Fields->FindField(FormFieldName);
-                        if (Field) {
+                        if (Field)
+                        {
                             msword.SetTextToFieldF(Document, FormFieldName, Field->AsString);
                         }
                     }
-                } catch (Exception &e) {
+                }
+                catch (Exception &e)
+                {
                     _threadStatus = WM_THREAD_ERROR_IN_PROCESS_ALT;
                     _threadMessage = "Возникла ошибка при замене полей FormFields в шаблоне """ + TemplateFullName + """"
                         ", поле """ + FormFieldName + """."
@@ -554,7 +635,8 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
                 {
                     // Если произошла ошибка, то используем порядковый номер очередного слияния n_doc
                 }
-                if (sFileNameInfix == "") {     //
+                if (sFileNameInfix == "")
+                {     //
                     sFileNameInfix = StrPadL(IntToStr(n_doc++), nPadLength, "0");
                 }
 
@@ -572,7 +654,7 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
 
                 try
                 {
-                    vNew = msword.ExportToWordFields(QueryMerge, Document, SavePath, ResultFileNamePrefix + "_" + sFileNameInfix + "_", param_word.page_per_doc);
+                    vNew = msword.ExportToWordFields(QueryMerge, Document, SavePath + ResultFileNamePrefix + "_[:counter]" + sFileNameInfix + "_", param_word.page_per_doc);
                 }
                 catch (Exception &e)
                 {
@@ -604,15 +686,13 @@ void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQu
     }
     msword.CloseApplication();
 
-    CoUninitialize();
-}
+    
+}   */
 
 //---------------------------------------------------------------------------
 // ФОРМИРОВАНИЕ ОТЧЕТА MS EXCEL
-void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
+void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 {
-    CoInitialize(NULL);
-
     bool fDone = false;
 
     // Определяем количество записей
@@ -629,7 +709,8 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
     int ExcelFieldCount = param_excel.Fields.size();
 
-    try {     // Определение списка полей, формирование шапки таблицы, определение типа данных
+    try      // Определение списка полей, формирование шапки таблицы, определение типа данных
+    {
         //data_body = CreateVariantArray(RecCount, FieldCount);  // Создаем массив для таблицы
         //data_head = CreateVariantArray(1, FieldCount);  // Шапка таблицы
 
@@ -687,7 +768,7 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
     {
         VarClear(data_head);
         VarClear(data_body);
-        CoUninitialize();
+
         _threadMessage = e.Message;
         throw Exception(_threadMessage);
         //fDone = true;
@@ -714,8 +795,8 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
             i++;
 	    }
         VarArrayUnlock(data_body);
-       try
-       {
+        try
+        {
             msexcel.OpenApplication();
             Workbook = msexcel.OpenDocument();
         }
@@ -723,13 +804,11 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
         {
             VarClear(data_head);
             VarClear(data_body);
-            CoUninitialize();
             _threadMessage = e.Message;
             throw Exception(_threadMessage);
         }
         Worksheet1 = msexcel.GetSheet(Workbook, 1);
     }
-
 
     if (!fDone && !VarIsEmpty(Worksheet1))  // Заполняем документ Excel
     {
@@ -775,7 +854,8 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
                 visible_param_count++;
             }
         }
-        if (param_count > 0) {    // Список параметров для вывода в Excel
+        if (param_count > 0)     // Список параметров для вывода в Excel
+        {
             data_parameters = CreateVariantArray(visible_param_count, 1);
             for (int i=0; i <= param_count-1; i++)
             {
@@ -899,7 +979,7 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
     VarClear(data_body);
     data_body = NULL;
 
-    CoUninitialize();
+
 
     if (fDone)
     {
@@ -910,11 +990,9 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
 //---------------------------------------------------------------------------
 // Заполнение Excel файла с использованием шаблона xlt
-void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields)
+void __fastcall TThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields)
 {
-    CoInitialize(NULL);
-
-    String TemplateFullName = AppPath + param_excel.template_name; // Абсолютный путь к файлу-шаблону
+    String TemplateFullName = param_excel.template_name; // Абсолютный путь к файлу-шаблону
 
     // Открываем шаблон MS Excel
     MSExcelWorks msexcel;
@@ -936,7 +1014,7 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
         catch (...)
         {
         }
-        CoUninitialize();
+
         _threadMessage = "Ошибка при открытии файла-шаблона " + TemplateFullName + ".\nОбратитесь к системному администратору.";
         throw Exception(_threadMessage);
     }
@@ -952,7 +1030,6 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
     catch (Exception &e)
     {
         msexcel.CloseApplication();
-        CoUninitialize();
         _threadMessage = e.Message;
         throw Exception(e);
     }
@@ -967,15 +1044,15 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
     }
     catch (Exception &e)
     {
-        try {
+        try
+        {
             msexcel.CloseApplication();
         }
         catch (...)
         {
         }
-        CoUninitialize();
         _threadMessage = e.Message;
-        throw e;
+        throw Exception(e);
     }
 
     if (DstFileName == "")         // Просто открываем документ, если имя файла-результата не задано
@@ -1007,13 +1084,12 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
     // В дальнейшем сделать аналогично выгрузке в MS Word
     // обьединение двух таблиц QueryFields и QueryTable
 
-    CoUninitialize();
 }
 
 //---------------------------------------------------------------------------
 // Заполнение DBF-файла
 // Переделать эту функцию с использование компонента TDbf
-void __fastcall ThreadSelect::ExportToDBF(TOraQuery *OraQuery)
+void __fastcall TThreadSelect::ExportToDBF(TOraQuery *OraQuery)
 {
     /*TStringList* ListFields;
     int n = this->param_dbase.Fields.size();
@@ -1040,7 +1116,8 @@ void __fastcall ThreadSelect::ExportToDBF(TOraQuery *OraQuery)
         throw Exception(_threadMessage);
     }
 
-    if (param_dbase.Fields.size() == 0) {
+    if (param_dbase.Fields.size() == 0)
+    {
         _threadMessage = "Не задан список полей в параметрах экспорта."
             "\nПожалуйста, обратитесь к системному администратору.";
         throw Exception(_threadMessage);
@@ -1060,7 +1137,8 @@ void __fastcall ThreadSelect::ExportToDBF(TOraQuery *OraQuery)
     // Создаем определение полей таблицы из параметров
     TDbfFieldDefs* TempFieldDefs = new TDbfFieldDefs(NULL);
 
-    if (TempFieldDefs == NULL) {
+    if (TempFieldDefs == NULL)
+    {
         _threadMessage = "Can't create storage.";
         throw Exception(_threadMessage);
     }

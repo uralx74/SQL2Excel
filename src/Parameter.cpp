@@ -195,9 +195,12 @@ void TParamRecord::setValueCalculator(const CalculateFunction &calculate)
  */
 String TParamRecord::calculate(const String& expression)
 {
-    if (_calculate != NULL) {
+    if (_calculate != NULL)
+    {
         return _calculate(expression);
-    } else {
+    }
+    else
+    {
         return expression;
     }
 }

@@ -2,9 +2,10 @@
 #define DatatypeH
 
 #include <vector>
+#include "DocumentWriter.h"
 
 // Структура для хранения параметров поля (столбца) DBASE
-typedef struct {    // Для описания структуры dbf-файла
+/*typedef struct {    // Для описания структуры dbf-файла
     String type;    // Тип fieldtype is a single character [C,D,F,L,M,N]
     String name;    // Имя поля (до 10 символов).
     int length;         // Длина поля
@@ -15,16 +16,16 @@ typedef struct {    // Для описания структуры dbf-файла
     // Memo	  10
     // Numeric	1-30
     // Decimals is 0 for non-numeric, number of decimals for numeric.
-} DBASEFIELD;
+} DBASEFIELD;*/
 
 // Структура для хранения параметров поля (столбца) MS Excel
-typedef struct {    // Для описания формата ячеек в Excel
+/*typedef struct {    // Для описания формата ячеек в Excel
     AnsiString format;      // Формат ячейки в Excel
     AnsiString name;        // Имя поля
     //int title_rows;       // Высота заголовка в строках
     int width;              // Ширина столбца
     int bwraptext;          // Флаг перенос по словам
-} EXCELFIELD;
+} EXCELFIELD;  */
 
 // Структура для хранения параметров экспорта в MS Excel
 typedef struct  {

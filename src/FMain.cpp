@@ -8,6 +8,7 @@
 #include "FMain.h"
 
 using namespace std;
+using namespace tasktools;
 
 //---------------------------------------------------------------------------
 #pragma package(smart_init)
@@ -57,17 +58,18 @@ String function_compare(const std::vector<String>& parameters)
  */
 String function_in(const std::vector<String>& parameters)
 {
-    if (parameters.size() < 2) {
+    if (parameters.size() < 2)
+    {
         return "error";
     }
 
     for (std::vector<String>::const_iterator it = parameters.begin()+1; it != parameters.end(); ++it)
     {
-        if (parameters[0] == *it ) {
+        if (parameters[0] == *it )
+        {
             return OleXml::TRUE_STR_VALUE;
         }
     }
-
     return OleXml::FALSE_STR_VALUE;
 }
 
@@ -96,23 +98,23 @@ String function_date(const std::vector<String>& parameters)
     // Вычисляем дату
     // Сначала определим точку отсчета (день и месяц), если заданы специальные опции
     // Текущий месяц (0), Первый месяц (1), последний месяц (2)
-    if (param_option_month == "1" || param_option_month == "first")
+    if (param_option_month == "1")
     {
         ResultDate = EncodeDate(YearOf(ResultDate), 1, DayOf(ResultDate));
     }
-    else if (param_option_month == "2" || param_option_month == "last")
+    else if (param_option_month == "2")
     {
         ResultDate = EncodeDate(YearOf(ResultDate), 12, DayOf(ResultDate));
     }
 
     // Текущее число (0), Первый день месяца (1), последний день месяца (2)
-    if (param_option_day == "1" || param_option_day == "first")
+    if ( param_option_day == "1" )
     {
         ResultDate = EncodeDate(YearOf(ResultDate), MonthOf(ResultDate), 1);
     }
-    else if (param_option_day == "2" || param_option_day == "last")
+    else if ( param_option_day == "2" )
     {
-        ResultDate = EncodeDate(YearOf(ResultDate), MonthOf(ResultDate), DaysInAMonth(ResultDate));
+        ResultDate =  EncodeDate(YearOf(ResultDate), MonthOf(ResultDate), DaysInMonth(ResultDate));
     }
 
     // Прибавляем дни и месяцы
@@ -218,6 +220,8 @@ void __fastcall TForm1::FormCreate(TObject *Sender)
     {
         OdacLog->WriteLog("START_APP");    // Запись в Лог-таблицу
         //FormResize(NULL);     // Если this->WindowState = wsMaximized
+        InitSystemVariables();  // Инициализируем системные переменные
+        InitCustomVariables();  // Инициализируем переменные среды
     }
     else
     {
@@ -254,10 +258,10 @@ bool __fastcall TForm1::PrepareForm()
         TabControl1->DoubleBuffered = true;
         Form1->Caption = "Программа для отчетов " + AppFullVersion + " - " + _username;
 
-        #ifndef NDEBUG
+        #ifdef _DEBUG
         Form1->Caption = Form1->Caption + " (Debuging...)";
         //OutputDebugString("Now starting dangerous function");
-        assert(1==1);
+        //assert(1==1);
         #endif
 
         return true;
@@ -268,11 +272,12 @@ bool __fastcall TForm1::PrepareForm()
 // Авторизация пользователя в программе
 bool __fastcall TForm1::Auth()
 {
-    LoginForm = new TLoginForm(Application);
-    bool loggedon = LoginForm->Execute(EsaleSession);
+    TLoginForm* LoginForm = new TLoginForm(this, EsaleSession, true);
+
+    bool loggedon = LoginForm->execute();
 
     _username = UpperCase(LoginForm->getUsername());
-    AddSystemVariable("username", _username);
+
     delete LoginForm;
     return loggedon;
 }
@@ -289,8 +294,8 @@ int __fastcall TForm1::LoadQueryList()
         " and upper(userlist) like '%ROLE=\"' || SYS.DBA_ROLE_PRIVS.GRANTED_ROLE || '\"%'"
         " ) where N=1"
         " )"
-        " where fvisible=1 and (upper(userlist) like '%USER=\"" + _username + "\"%' or GRANTED_ROLE is not null)"
-        " order by taborder,tabname,sortorder,queryname";
+        " where visible_flg=1 and (upper(userlist) like '%USER=\"" + _username + "\"%' or GRANTED_ROLE is not null)"
+        " order by taborder, tabname, sortorder, queryname";
 
     //AnsiString Str = "SELECT * FROM spr_task_sql2excel where fvisible=1 and upper(userlist) like '%USER=\"" + Username + "\"%' order by taborder,tabname,sortorder,queryname";
 
@@ -322,8 +327,6 @@ int __fastcall TForm1::LoadQueryList()
 // Загружает список запросов в вектор
 int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list)
 {
-    InitEnvVariables();  // Инициализация переменных среды
-
     int RecCount = oraquery->RecordCount;
     if (RecCount <= 0) {
         return NULL;
@@ -339,7 +342,8 @@ int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQuer
     int tabindex = 0;
     AnsiString PrevTabName = "";
 
-   	for( ; !oraquery->Eof; oraquery->Next()) {
+   	for( ; !oraquery->Eof; oraquery->Next())
+    {
         // В дальнейшем переделать на вектор указателей, чтобы не дублировать данные при добавлени в вектор
         TQueryItem query;
         query.fExcelFile = false;  // Флаг Excel в файл
@@ -359,21 +363,30 @@ int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQuer
         query.spr_task_sql2excel_id = oraquery->FieldByName("spr_task_sql2excel_id")->AsString;
         query.tabname    = oraquery->FieldByName("tabname")->AsString;
 
-        try {
+        try
+        {
             ParseUserParamsStr(oraquery->FieldByName("userparams")->AsString, &query);
-        } catch (...) {
+        }
+        catch (...)
+        {
         }
         ParseExportParamsStr(oraquery->FieldByName("exportparams")->AsString, &query);
 
-        if (oraquery->FieldByName("fieldslist")->IsNull) {      // Строка - комментарий к запросу (перечень выводимых полей)
-            if (query.param_excel.Fields.size() > 0) {                 // Если не заполнена строка, то брать из параметра выгрузки в Excel
+        if (oraquery->FieldByName("fieldslist")->IsNull)
+        {      // Строка - комментарий к запросу (перечень выводимых полей)
+            if (query.param_excel.Fields.size() > 0)
+            {                 // Если не заполнена строка, то брать из параметра выгрузки в Excel
                 query.fieldslist = "";
                 vector<EXCELFIELD>::iterator cur;
                 for (cur = query.param_excel.Fields.begin(); cur < query.param_excel.Fields.end() - 1; cur++)
+                {
                     query.fieldslist += cur->name + " | ";
+                }
                 query.fieldslist += cur->name;
             }
-        } else {
+        }
+        else
+        {
             query.fieldslist = oraquery->FieldByName("fieldslist")->AsString;
         }
 
@@ -381,7 +394,8 @@ int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQuer
         query_list.push_back(query);
 
         tabindex = tab_list.size()-1;
-        if (tabindex == -1 || tab_list[tabindex].name != query.tabname) {
+        if (tabindex == -1 || tab_list[tabindex].name != query.tabname)
+        {
             TTabItem Tab;
             Tab.name = query.tabname;
             tab_list.push_back(Tab);
@@ -400,12 +414,15 @@ int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQuer
 String TForm1::GetValueFromSQL(String SQLText, String dbindex)
 {
     if (SQLText.Trim() == "")
+    {
         return "";
+    }
 
     String result = "";
     TOraQuery *OraQuery = NULL;
 
-    try {
+    try
+    {
 
         TOraSession *orasession = m_sessions[StrToInt(dbindex)];
         orasession->Connected = true;
@@ -419,9 +436,13 @@ String TForm1::GetValueFromSQL(String SQLText, String dbindex)
 
         OraQuery->Close();
         delete OraQuery;
-    } catch(...) {
+    }
+    catch(...)
+    {
         if (OraQuery != NULL)
+        {
             delete OraQuery;
+        }
     }
 
     return result;
@@ -471,7 +492,8 @@ void TForm1::ParseUserParamsStr(AnsiString ParamStr, TQueryItem* queryitem)
  */
 void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 {
-    if (ParseStr == "") {
+    if (ParseStr == "")
+    {
         queryitem->DefaultExportType = EM_EXCEL_BLANK; // Если параметры отсутствуют, то по умолчанию выполнять запрос как SELECT
         return;
     }
@@ -481,12 +503,14 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
     AnsiString FirstId = "";
     queryitem->DefaultExportType = EM_UNDEFINITE;
 
-    try {
+    try
+    {
         String attribute;
         OleXml msxml;
         msxml.LoadXMLText(ParseStr);
 
-        if (msxml.GetParseError() != "") {
+        if (msxml.GetParseError() != "")
+        {
             return;
         }
 
@@ -501,7 +525,8 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
         //while (!node.IsEmpty())
         while ( !VarIsClear(node) )
         {
-            if (LowerCase(msxml.GetAttributeValue(node, "enable")) == "false") {
+            if (LowerCase(msxml.GetAttributeValue(node, "enable")) == "false")
+            {
                 node = msxml.GetNextNode(node);
                 continue;
             }
@@ -509,7 +534,8 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 
             // Если не задан параметр выгрузки по умолчанию,
             // то используется первый параметр, в порядке загрузке (именованый или с id = "0")
-            if (queryitem->exportparam_id == "m_") {
+            if (queryitem->exportparam_id == "m_")
+            {
                 queryitem->exportparam_id = msxml.GetAttributeValue(node, "id", AnsiString("0"));
             }
 
@@ -532,7 +558,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 
                 queryitem->param_excel.title_label = msxml.GetAttributeValue(node, "title", queryitem->queryname);
                 queryitem->param_excel.title_height = msxml.GetAttributeValue(node, "title-height", -1); // Высота заголовка в строках
-                queryitem->param_excel.template_name = msxml.GetAttributeValue(node, "template", AnsiString(""));
+                queryitem->param_excel.template_name =  filetools::ExpandFileNameCustom( msxml.GetAttributeValue(node, "template", AnsiString("")), AppPath);
                 queryitem->param_excel.fUnbounded = msxml.GetAttributeValue(node, "unbounded", false);
                 queryitem->param_excel.table_range_name = msxml.GetAttributeValue(node, "table_range", AnsiString(""));
 
@@ -613,11 +639,13 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                     subnode = msxml.GetNextNode(subnode);
                 }
 
-                if (queryitem->param_dbase.id == queryitem->exportparam_id) {
+                if (queryitem->param_dbase.id == queryitem->exportparam_id)
+                {
                     queryitem->DefaultExportType = EM_DBASE4_FILE;
                 }
 
-            } else if (sNodeName == "word")
+            }
+            else if (sNodeName == "word")
             {
                 if (queryitem->fWordFile)   // Загружаем только первый параметр этого типа
                 {
@@ -631,7 +659,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                     queryitem->param_word.id = IntToStr(unassigned_id++);
                 }
 
-                queryitem->param_word.template_name = msxml.GetAttributeValue(node, "template");
+                queryitem->param_word.template_name = filetools::ExpandFileNameCustom(msxml.GetAttributeValue(node, "template"), AppPath);
                 queryitem->param_word.filter_main_field = msxml.GetAttributeValue(node, "filter_main_field", AnsiString(""));
                 queryitem->param_word.filter_sec_field = msxml.GetAttributeValue(node, "filter_sec_field", AnsiString(""));
                 queryitem->param_word.filter_infix_sec_field = msxml.GetAttributeValue(node, "filter_infix_sec_field", AnsiString(""));
@@ -645,11 +673,13 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
             else if (sNodeName == "execute")
             {
                 queryitem->param_execute.id = "m_" + msxml.GetAttributeValue(node, "id");
-                if (queryitem->param_execute.id == "m_") {
+                if (queryitem->param_execute.id == "m_")
+                {
                     queryitem->param_execute.id = IntToStr(unassigned_id++);
                 }
 
-                if (queryitem->param_execute.id == queryitem->exportparam_id) {
+                if (queryitem->param_execute.id == queryitem->exportparam_id)
+                {
                     queryitem->DefaultExportType = EM_PROCEDURE;
                 }
             }
@@ -665,7 +695,8 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
             node = msxml.GetNextNode(node);
         }
 
-        if (queryitem->DefaultExportType == EM_UNDEFINITE) {
+        if (queryitem->DefaultExportType == EM_UNDEFINITE)
+        {
             if (queryitem->param_excel.template_name == "")    // В шаблон если указан шаблон
             {
                 queryitem->DefaultExportType = EM_EXCEL_BLANK;
@@ -701,10 +732,12 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
     threadopt->queryName = CurrentQueryItem->queryname;
     switch (ExportMode)
     {
-        case EM_PROCEDURE: {
+        case EM_PROCEDURE:
+        {
         // Предупреждаем, что может произойти необратимое изменение данных
             String msg = "Внимание! Выполнение данного запроса может привести к необратимому изменению данных. Продолжить?";
-            if (MessageBoxQuestion(msg) != IDNO) {
+            if (MessageBoxQuestion(msg) != IDNO)
+            {
                 threadopt->exportmode = ExportMode;
                 DoExport(threadopt);
             }
@@ -712,10 +745,13 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
         break;
         case EM_EXCEL_BLANK:
         {
-            if (Tag == 0) {
+            if (Tag == 0)
+            {
                 threadopt->exportmode = ExportMode;
                 DoExport(threadopt);
-            } else {
+            }
+            else
+            {
                 // Опции окна сохранения результов
                 SaveDialog1->Options.Clear();
                 SaveDialog1->Options << ofFileMustExist;
@@ -724,7 +760,8 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
                 SaveDialog1->DefaultExt = "xlsx";
 
                 AnsiString filename;
-                if (SaveDialog1->Execute()) {
+                if (SaveDialog1->Execute())
+                {
                     threadopt->dstfilename = SaveDialog1->FileName;
                     threadopt->exportmode = ExportMode;
                     DoExport(threadopt);
@@ -732,11 +769,15 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
             }
         }
         break;
-        case EM_EXCEL_TEMPLATE: {
-            if (Tag == 0) {
+        case EM_EXCEL_TEMPLATE:
+        {
+            if (Tag == 0)
+            {
                 threadopt->exportmode = ExportMode;
                 DoExport(threadopt);
-            } else {
+            }
+            else
+            {
                 // Опции окна сохранения результов
                 SaveDialog1->Options.Clear();
                 SaveDialog1->Options << ofFileMustExist;
@@ -745,7 +786,8 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
                 SaveDialog1->DefaultExt = "xlsx";
 
                 AnsiString filename;
-                if (SaveDialog1->Execute()) {
+                if (SaveDialog1->Execute())
+                {
                     threadopt->dstfilename = SaveDialog1->FileName;
                     threadopt->exportmode = ExportMode;
                     DoExport(threadopt);
@@ -753,10 +795,13 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
             }
         }
         break;
-        case EM_WORD_TEMPLATE: {
+        case EM_WORD_TEMPLATE:
+        {
             // Проверяем на сущестовование файла-шаблона
-            String TemplateFullName = AppPath + CurrentQueryItem->param_word.template_name;
-            if(!FileExists(TemplateFullName)) {
+            //String TemplateFullName = calculateValue(CurrentQueryItem->param_word.template_name);
+            String TemplateFullName = CurrentQueryItem->param_word.template_name;
+            if( !FileExists(TemplateFullName) )
+            {
                 MessageBoxStop("Файл шаблона " + TemplateFullName + " не найден.");
                 return;
             }
@@ -768,14 +813,16 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
             SaveDialog1->FilterIndex = 1;
             SaveDialog1->DefaultExt = "";
 
-            if (SaveDialog1->Execute()) {
+            if ( SaveDialog1->Execute() )
+            {
                 threadopt->dstfilename = ChangeFileExt(SaveDialog1->FileName, "");
                 threadopt->exportmode = ExportMode;
                 DoExport(threadopt);
-             }
+            }
         }
         break;
-        case EM_DBASE4_FILE: {
+        case EM_DBASE4_FILE:
+        {
 
             SaveDialog1->Options.Clear();
             SaveDialog1->Options << ofFileMustExist;
@@ -784,7 +831,8 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
             SaveDialog1->DefaultExt = "dbf";
 
             AnsiString filename;
-            if (SaveDialog1->Execute()) {
+            if (SaveDialog1->Execute())
+            {
                 //filename = SaveDialog1->FileName;
                 //DoExport(ThreadSelect::TO_DBASE4_FILE, filename);
                 threadopt->dstfilename = SaveDialog1->FileName;
@@ -811,12 +859,11 @@ void __fastcall TForm1::ActionAsProcedureExecute(TObject *Sender)
     Run(CurrentQueryItem->DefaultExportType);
 }
 
-
 /* Экспорт в файл Excel
  */
 void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
 {
-    if (CurrentQueryItem->param_excel.template_name == "")
+    if ( CurrentQueryItem->param_excel.template_name == "" )
     {
         Run(EM_EXCEL_BLANK, 1);
     }
@@ -831,7 +878,7 @@ void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
  */
 void __fastcall TForm1::ActionExportExcelBlankExecute(TObject *Sender)
 {
-    if (CurrentQueryItem->param_excel.template_name == "")
+    if ( CurrentQueryItem->param_excel.template_name == "" )
     {
         Run(EM_EXCEL_BLANK, 0);
     }
@@ -864,7 +911,6 @@ void __fastcall TForm1::FormClose(TObject *Sender, TCloseAction &Action)
     dangerWords.clear();
 
     OdacLog->WriteLog("CLOSE_APP");    // Запись в Лог-таблицу
-
 }
 
 /* Тестирование параметров на наличие опасных (запрещенных) значений
@@ -954,11 +1000,11 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
 }
 
 
-//---------------------------------------------------------------------------
-// Инициализация переменных среды
-// ВНИМАНИЕ! Эта функция зависит от наличия некоторых таблиц в базе данных
-// заданных значением EsaleSession.
-void TForm1::InitEnvVariables()
+/* Инициализация переменных среды
+  ВНИМАНИЕ! Эта функция зависит от наличия некоторых таблиц в базе данных
+  заданных значением EsaleSession.
+*/
+void TForm1::InitCustomVariables()
 {
     // Определение кода филиала
     // и кода участка
@@ -970,8 +1016,6 @@ void TForm1::InitEnvVariables()
     //OraQuery->SQL->Add("select * from raion where substr(:username,3,2) = substr(uuser,3,2)");
 
     TOraQuery *EnvVarQueries = new TOraQuery(NULL);
-
-
 
     OraQuery->SQL->Add("select * from " + envSpr);
     OraQuery->Open();
@@ -1002,28 +1046,41 @@ void TForm1::InitEnvVariables()
     delete EnvVarQueries;
     EnvVarQueries = NULL;
 
-    OraQuery->SQL->Clear();
-    //delete OraQuery;
-    //OraQuery = NULL;
+    delete OraQuery;
+    OraQuery = NULL;
+}
 
+/* Инициализируем системные переменные */
+void TForm1::InitSystemVariables()
+{
+    /* $app_path */
+    AddSystemVariable("app_path", ExtractFilePath(Application->ExeName));
 
+    /* $username */
+    AddSystemVariable("username", _username);
+
+    /* $roles */
+    TOraQuery *OraQuery = new TOraQuery(NULL);
+    OraQuery->Session = EsaleSession;
 
     // Формируем список полей в одну строку _roles
-    String roles = "{";
-    //TOraQuery *OraQuery = new TOraQuery(NULL);
-    //OraQuery->Session = EsaleSession;
+    //String roles = "(";  Закоментировано 2017-03-02 Так как скобки можно
+    // подставить во время использования.
+    // Для того чтобы можно было использовать список в sql-запросе в качестве аргумента функции IN(...)
+    // и для того чтобы можно было использовать в функции $in в данной программе.
+    String roles = "";
     OraQuery->SQL->Add("select * from session_roles");
     OraQuery->Open();
-    while (!OraQuery->Eof)
+    while ( !OraQuery->Eof )
     {
-        roles += "'"+OraQuery->FieldByName("role")->AsString+"'";
+        roles += "'" + OraQuery->FieldByName("role")->AsString + "'";
         OraQuery->Next();
         if (!OraQuery->Eof)
         {
             roles += ",";
         }
     }
-    roles +="}";
+    //roles +=")";
     OraQuery->Close();
     delete OraQuery;
 
@@ -1316,13 +1373,16 @@ void __fastcall TForm1::ListBox1DrawItem(TWinControl *Control, int Index,
     // Разбиваем строки
     std::string separator = "\\n";
     int k = str.find(separator);
-    if (k > 0) {
+    if (k > 0)
+    {
         text1 = str.substr(0, k);
         text1 = text1 + "\0";
 
         int le = str.length()-k;
         text2 = str.substr(k+2, le);
-    } else {
+    }
+    else
+    {
         text1 = str;
         text2 = "";
     }
@@ -1330,10 +1390,13 @@ void __fastcall TForm1::ListBox1DrawItem(TWinControl *Control, int Index,
     // РИСОВАНИЕ
     pCanvas->Lock();
 
-    if (Index % 2 == 1) {       //Красим не чётные строки
+    if (Index % 2 == 1)
+    {       //Красим не чётные строки
         pCanvas->Brush->Color = colorBkOdd;
         pCanvas->FillRect(Rect);
-    } else {
+    }
+    else
+    {
         pCanvas->Brush->Color = colorBkEven;
         pCanvas->FillRect(Rect);    // Очищаем область (старый фон)
     }
@@ -1348,27 +1411,36 @@ void __fastcall TForm1::ListBox1DrawItem(TWinControl *Control, int Index,
     // Вывод текста
     const int offset = 3;       // set this to offset the text
 
-    if (State.Contains(odSelected))     // Цвет для первой строки
+    if ( State.Contains(odSelected) )     // Цвет для первой строки
+    {
         pCanvas->Font->Color = colorText1Sel;    // Цвет шрифта
+    }
     else
+    {
         pCanvas->Font->Color = colorText1;    // Цвет шрифта
-
+    }
 
     pCanvas->TextWidth(text1.c_str())+2+2;
     unsigned int th = pCanvas->TextHeight(text1.c_str());
 
-    if (text1 != "") {
+    if (text1 != "")
+    {
         //pCanvas->Font->Size=12;
         pCanvas->Font->Style = pCanvas->Font->Style << fsBold;// << fsUnderline;
         pCanvas->TextOut(
             Rect.Left + offset, Rect.Top+3,
             text1.c_str() );
     }
-    if (text2 != "") {
+    if (text2 != "")
+    {
         if (State.Contains(odSelected))     // Цвет для второй строки
+        {
             pCanvas->Font->Color = colorText2Sel;    // Цвет шрифта
+        }
         else
+        {
             pCanvas->Font->Color = colorText2;    // Цвет шрифта
+        }
 
         //pCanvas->Font->Color = RGB(80,80,80);    // Цвет шрифта
         pCanvas->Font->Style = pCanvas->Font->Style >> fsBold;// >> fsUnderline;
@@ -1380,7 +1452,8 @@ void __fastcall TForm1::ListBox1DrawItem(TWinControl *Control, int Index,
             text2.c_str() );
     }
 
-    if (State.Contains(odFocused)) {    // Убираем рамку фокуса
+    if ( State.Contains(odFocused) )
+    {    // Убираем рамку фокуса
         // remove the focus rect (i.e., XOR it away)
         DrawFocusRect(pCanvas->Handle, &Rect);
     }
@@ -1417,7 +1490,8 @@ void TForm1::FillParametersLV()
     {
         TParamRecord *record = CurrentQueryItem->UserParams[i];
 
-        if ( !record->isVisible() ) {
+        if ( !record->isVisible() )
+        {
             continue;
         }
 
@@ -1435,23 +1509,31 @@ void TForm1::FillParametersLV()
     // Здесь, возможно, стоит поработать, так как по умолчанию
     // если выгружается в Excel, то ВСЕГДА выгружается в память
     BitBtn1->Glyph = NULL;
-    switch(CurrentQueryItem->DefaultExportType) {
+    switch(CurrentQueryItem->DefaultExportType)
+    {
     case EM_PROCEDURE:
+    {
         ActionDefaultRun->Caption = ActionAsProcedure->Caption;
         BitBtn2->Enabled = false;
         ImageList1->GetBitmap(0, BitBtn1->Glyph);
         break;
+    }
     case EM_EXCEL_BLANK:
+    {
         ActionDefaultRun->Caption = ActionExportExcelBlank->Caption;
         BitBtn2->Enabled = true;
         ImageList1->GetBitmap(1, BitBtn1->Glyph);
         break;
+    }
     case EM_EXCEL_TEMPLATE:
+    {
         ActionDefaultRun->Caption = ActionExportExcelBlank->Caption;
         BitBtn2->Enabled = true;
         ImageList1->GetBitmap(1, BitBtn1->Glyph);
         break;
+    }
     case EM_WORD_TEMPLATE:
+    {
         ActionDefaultRun->Caption = ActionExportWordFile->Caption;
         BitBtn2->Enabled = true;
         ImageList1->GetBitmap(2, BitBtn1->Glyph);
@@ -1461,11 +1543,14 @@ void TForm1::FillParametersLV()
         BitBtn2->Enabled = true;
         ImageList1->GetBitmap(2, BitBtn1->Glyph);
         break; */
+    }
     case EM_DBASE4_FILE:
+    {
         ActionDefaultRun->Caption = ActionExportDbfFile->Caption;
         BitBtn2->Enabled = true;
         ImageList1->GetBitmap(3,BitBtn1->Glyph);
         break;
+    }
     }
     BitBtn1->Caption = ActionDefaultRun->Caption;
 }
@@ -1475,33 +1560,36 @@ void TForm1::FillParametersLV()
 bool TForm1::CheckCondition(AnsiString condition)
 {
     if (condition.Trim() == "")
+    {
         return false;
+    }
 
     vector<AnsiString> t;
     t = Explode(condition, "=", false);
-    if (t.size() == 1)
 
-
-    if (t.size() == 1) {
+    if ( t.size() == 1 )
+    {
         t[0] = t[0].LowerCase();
         if ( t[0]== "true")
+        {
             return true;
+        }
         else
+        {
             return false;
+        }
     }
-    else if (t.size() != 2) {
+    else if ( t.size() != 2 )
+    {
         return false;
-    } else
+    }
+    else
+    {
         return t[0] == t[1];
+    }
 
 
-/*    String lparam = ReplaceVariables(&m_env_var, t[0]);  // Подстановка предопределенных значений в среде
-    lparam = ReplaceVariables(&queryitem->Variables, t[0]);  // Подстановка значений, определенных в QUERYITEM
 
-    String rparam = ReplaceEnvVariables(&m_env_var, t[1]);
-    rparam = ReplaceEnvVariables(&queryitem->Variables, t[1]); */
-
-//    return lparam == rparam;
 }
 
 /*
@@ -1577,8 +1665,6 @@ void __fastcall TForm1::PageControl1DrawTab(TCustomTabControl *Control,
     pCanvas->Lock();    // Блокирум канвас перед рисованием
     pCanvas->TextRect(Rect, Rect.Left+10, Rect.Bottom-4, TabCaption);
     pCanvas->Unlock();
-
-
 }
 //---------------------------------------------------------------------------
 //
@@ -1599,14 +1685,17 @@ void TForm1::FillFieldsLB()
     TTabItem* TabItem = &TabList[TabControl1->TabIndex];
     ListBox1->Items->BeginUpdate();
     ListBox1->Clear();
-    for (QueryItemList::size_type i = 0; i < TabItem->queryitem.size(); i++) {
+    for (QueryItemList::size_type i = 0; i < TabItem->queryitem.size(); i++)
+    {
         AnsiString sName = TabItem->queryitem[i]->queryname;   // QueryName
         AnsiString sFields = TabItem->queryitem[i]->fieldslist; // Fields
         ListBox1->Items->Add(sName + "\\n" + sFields);
-     }
+    }
     ListBox1->Items->EndUpdate();
     if (ListBox1->Items->Count > 0)
+    {
         ListBox1->ItemIndex = 0;
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -1616,10 +1705,13 @@ void TForm1::PrepareTabs()
     AnsiString stabs;
 
     if (TabList.size() > 0)
+    {
         stabs = TabList[0].name;
+    }
 
-    for (int i = 1; i < TabList.size(); i++) {
-        stabs = stabs + "\n" + TabList[i].name  ;
+    for (int i = 1; i < TabList.size(); i++)
+    {
+        stabs = stabs + "\n" + TabList[i].name;
     }
 
     TabControl1->Tabs->BeginUpdate();
@@ -1641,7 +1733,7 @@ void __fastcall TForm1::Timer1Timer(TObject *Sender)
     TotalTime += 0.001 * Timer1 -> Interval;
     AnsiString sec = IntToStr((int) TotalTime % 60);
     AnsiString min = IntToStr((int) TotalTime / 60);
-    sec = str_pad(sec.c_str(), 2, "0", STR_PAD_LEFT).c_str();
+    sec = StrPadL(sec.c_str(), 2, "0").c_str();
     StatusBar1->Panels->Items[0]->Text =  min + ":" + sec;
 
     Application->ProcessMessages();
@@ -1660,7 +1752,8 @@ void __fastcall TForm1::DinamicControlExit(TObject *Sender)
         if (param->type == "list")
         {
             TComboBox *ComboBox = (TComboBox*)Sender;
-            if (ComboBox->ItemIndex >=0) {
+            if (ComboBox->ItemIndex >=0)
+            {
                 param->setValue(ComboBox->ItemIndex);
             }
         }
@@ -1668,20 +1761,29 @@ void __fastcall TForm1::DinamicControlExit(TObject *Sender)
         {
             TDateTimePicker* DateTimePicker = (TDateTimePicker*)Sender;
             param->setValue(DateTimePicker->DateTime);
-        } else if (param->type == "string") {
+        }
+        else if (param->type == "string")
+        {
             String text = "";
-             try {
-                text = dynamic_cast<TEdit*>(Sender)->Text;
-             } catch (...) {
-                text = dynamic_cast<TMaskEdit*>(Sender)->Text;
-             }
-             param->setValue(text);
-        } else if (param->type == "integer" || param->type == "float" ) {
+            try
+            {
+               text = dynamic_cast<TEdit*>(Sender)->Text;
+            }
+            catch (...)
+            {
+               text = dynamic_cast<TMaskEdit*>(Sender)->Text;
+            }
+            param->setValue(text);
+        }
+        else if (param->type == "integer" || param->type == "float" )
+        {
             param->setValue(NumEdit1->Text);
         }
 
         ParamsLV->Items->Item[ParamsLV->Tag]->SubItems->Strings[0] = param->getDisplay();
-    } else {
+    }
+    else
+    {
         DateTimePicker1->Visible = false;
         Edit1->Visible = false;
         MaskEdit1->Visible = false;
@@ -1695,10 +1797,13 @@ void __fastcall TForm1::DinamicControlExit(TObject *Sender)
 void __fastcall TForm1::DinamicControlOnKeyDown(TObject *Sender, WORD &Key,
       TShiftState Shift)
 {
-    if (Key == VK_ESCAPE) { // Доделать (неправильно обрабатывается нажатие Esc)
+    if (Key == VK_ESCAPE)
+    { // Доделать (неправильно обрабатывается нажатие Esc)
         TControl *Control = (TControl*)Sender;
         Control->Visible = false;
-    } else if (Key == VK_RETURN) {
+    }
+    else if (Key == VK_RETURN)
+    {
         DinamicControlExit(Sender);
     } 
 }
@@ -1742,13 +1847,16 @@ void __fastcall TForm1::OnEditParam()
 
     int n = 0;
     int paramitem_index = 0;  // Индекс элемента в векторе параметров CurrentQueryItem->Parameters
-    for (paramitem_index = 0; paramitem_index < CurrentQueryItem->UserParams.size(); paramitem_index++) {
+    for (paramitem_index = 0; paramitem_index < CurrentQueryItem->UserParams.size(); paramitem_index++)
+    {
         TParamRecord *param = CurrentQueryItem->UserParams[paramitem_index];
 
-        if ( !param->isVisible() ) { // пропуск скрытых элементов (visibleflg = false)
+        if ( !param->isVisible() )
+        { // пропуск скрытых элементов (visibleflg = false)
             continue;
         }
-        if (n == LV_itemindex) {
+        if (n == LV_itemindex)
+        {
             break;
         }
         n++;
@@ -1757,9 +1865,6 @@ void __fastcall TForm1::OnEditParam()
     TParamRecord *param;
     param = CurrentQueryItem->UserParams[paramitem_index];
     //param->show();
-
-
-
 
     //TWinControl *Control;
 
@@ -1780,9 +1885,12 @@ void __fastcall TForm1::OnEditParam()
         DateTimePicker1->Font->Size = 10;
         DateTimePicker1->Tag = paramitem_index;  // Текущий выделенный элемент в векторе
 
-        try {
+        try
+        {
             DateTimePicker1->Date = StrToDate(param->getDisplay());
-        } catch (...) {
+        }
+        catch (...)
+        {
             DateTimePicker1->Date = Now();
         }
 
@@ -1790,7 +1898,8 @@ void __fastcall TForm1::OnEditParam()
         DateTimePicker1->SetFocus();
         //CurrentDinamicControl = DateTimePicker1;
     }
-    else if (param->type == "list") {
+    else if (param->type == "list")
+    {
         ComboBox1->Parent = ParamsLV;
         ComboBox1->Width = width;
         ComboBox1->Top=top;
@@ -1811,7 +1920,9 @@ void __fastcall TForm1::OnEditParam()
         ComboBox1->Visible = true;
         ComboBox1->SetFocus();
 
-    } else if (param->type == "string") {
+    }
+    else if (param->type == "string")
+    {
 
         if (  static_cast<TStringParameter*>(param)->mask == "" )
         {
@@ -1887,19 +1998,27 @@ void __fastcall TForm1::ParamsLVAdvancedCustomDraw(
 
     pCanvas->Lock();
 
-    if (ParamsLV->Items->Count > 0) {
+    if (ParamsLV->Items->Count > 0)
+    {
         TListItem *Item = ParamsLV->Items->Item[ParamsLV->Tag];  // Текущий выделенный элемент в ParamsLV
-        if (Edit1->Visible) {
+        if (Edit1->Visible)
+        {
             Rect = Item->DisplayRect(drBounds);
             Edit1->Top = Rect.Top;
-        } else if (ComboBox1->Visible) {
+        }
+        else if (ComboBox1->Visible)
+        {
             Rect = Item->DisplayRect(drBounds);
             ComboBox1->Top = Rect.Top;
-        } else if (DateTimePicker1->Visible) {
+        }
+        else if (DateTimePicker1->Visible)
+        {
             Rect = Item->DisplayRect(drBounds);
             DateTimePicker1->Top = Rect.Top;
         }
-    } else {
+    }
+    else
+    {
         pCanvas->Brush->Color = clBtnFace;
         pCanvas->FillRect(ARect);
     }
@@ -1917,7 +2036,8 @@ void __fastcall TForm1::ParamsLVAdvancedCustomDraw(
 
         bool bSeparator = CurrentQueryItem->UserParams[Item->Index]->type == "separator";
 
-        if (!bSeparator) {
+        if (!bSeparator)
+        {
             // Если не разделитель
             RectItem = Item->DisplayRect(drLabel);
             RectItem = TRect(RectItem.Left, RectItem.Top, RectItem.Right, RectItem.Bottom-1);
@@ -1930,7 +2050,9 @@ void __fastcall TForm1::ParamsLVAdvancedCustomDraw(
             pCanvas->Font->Color = clNavy;
             pCanvas->Brush->Color = colorBkSubItems;
             pCanvas->TextRect(RectSubItem, RectSubItem.Left+2, RectSubItem.Top+2, Item->SubItems->Strings[0]);
-        } else {
+        }
+        else
+        {
             // Если разделитель
             RectItem = Item->DisplayRect(drLabel);
             RectItem = TRect(RectItem.Left, RectItem.Top, Rect.Right, Rect.Bottom-1);
@@ -1985,10 +2107,13 @@ void __fastcall TForm1::ActionCopyQueryExecute(TObject *Sender)
 // Отобразить текст основного запроса
 void __fastcall TForm1::ActionShowMainQueryExecute(TObject *Sender)
 {
-    if (CurrentQueryItem->querytext != "") {
+    if (CurrentQueryItem->querytext != "")
+    {
         AnsiString str = GetSQL(CurrentQueryItem->querytext, &CurrentQueryItem->UserParams);
         FormShowQuery->ShowQuery(str, "SQL-текст основного запроса \"" + CurrentQueryItem->queryname + "\"");
-    } else {
+    }
+    else
+    {
         MessageBoxInf("Текст основного запроса отсутствует.\n");
     }
 
@@ -1999,10 +2124,13 @@ void __fastcall TForm1::ActionShowMainQueryExecute(TObject *Sender)
 // Отобразить текст вспомогательного запроса
 void __fastcall TForm1::ActionShowSecondaryQueryExecute(TObject *Sender)
 {
-    if (CurrentQueryItem->querytext2 != "") {
+    if (CurrentQueryItem->querytext2 != "")
+    {
         AnsiString str = GetSQL(CurrentQueryItem->querytext2, &CurrentQueryItem->UserParams);
         FormShowQuery->ShowQuery(str, "SQL-текст вспомогательного запроса \"" + CurrentQueryItem->queryname + "\"");
-    } else {
+    }
+    else
+    {
         MessageBoxInf("Текст вспомогательного запроса отсутствует.\n");
     }
 }
@@ -2040,16 +2168,24 @@ bool __fastcall TForm1::CheckLock(int dbindex)
 {
     CheckLockQuery->ParamByName("dbindex")->AsInteger = dbindex;
     if (CheckLockQuery->Active)
+    {
         CheckLockQuery->Refresh();
+    }
     else
+    {
         CheckLockQuery->Execute();
+    }
 
-    if (CheckLockQuery->RecordCount > 0) {
-        if (bAdmin) {
+    if (CheckLockQuery->RecordCount > 0)
+    {
+        if (bAdmin)
+        {
             String msg = "Запросы к базе данных " + m_sessions[dbindex]->Name + " заблокированы.\nПродолжить в любом случае?";
             //if (MessageBoxQuestion(msg) != IDNO) {
             return MessageBoxQuestion(msg) == IDNO;
-        } else {
+        }
+        else
+        {
             String msg = "Запросы к базе данных " + m_sessions[dbindex]->Name + " заблокированы.\nПопробуйте выполнить данный запрос позднее.";
             MessageBoxInf(msg);
 
@@ -2079,7 +2215,8 @@ void __fastcall TForm1::BitBtn2Click(TObject *Sender)
 void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
 {
     // Выполнение выбранного запроса
-    if (ListBox1->ItemIndex < 0) {          // Если не выбран запрос в списке
+    if (ListBox1->ItemIndex < 0)
+    {          // Если не выбран запрос в списке
         MessageBoxStop("Выберите запрос!");
         return;
     }
@@ -2087,17 +2224,21 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
     // Выбор необходимого OraSession
     TOraSession *orasession = NULL;
     TOraSession *orasession2 = NULL;
-    try {                                       // Если в запросе в БД не указан индекс в поле DBNAME
+    try
+    {                                       // Если в запросе в БД не указан индекс в поле DBNAME
         int dbname = 0;
         int dbname2 = 0;
         dbname = StrToInt(CurrentQueryItem->dbname);
         orasession = m_sessions[dbname];       // Основная сессия
 
-        if (CurrentQueryItem->dbname2 != "") {
+        if (CurrentQueryItem->dbname2 != "")
+        {
             dbname2 = StrToInt(CurrentQueryItem->dbname2);
             orasession2  = m_sessions[dbname2];    // Дополнительная сессия
         }
-    } catch(...) {
+    }
+    catch(...)
+    {
         MessageBoxStop("Исходная база данных указана не верно!\nОбратитесь к администратору.");
         return;
     }
@@ -2121,7 +2262,7 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
     threadopt->TemplateOraSession2 = orasession2;
 
     // СОЗДАНИЕ И ЗАПУСК ПОТОКА
-    ts = new ThreadSelect(true, threadopt);    // Создаем приостановленный поток
+    ts = new TThreadSelect(true, threadopt);    // Создаем приостановленный поток
     //ts = new ThreadSelect(true, threadopt, threadListener);    // Создаем приостановленный поток
 
     //void (*f)(const String&, int);
@@ -2140,7 +2281,7 @@ void __fastcall TForm1::ActionAboutAppExecute(TObject *Sender)
     //
     String MsgStr = "Программа для подготовки отчетов\nSQL2Excel v." + AppVersion + " (" + AppBuild + ")"
         "\n"
-        "\nCopyright © 2014-2016"
+        "\nCopyright © 2014-2017"
         "\nЦентральный филиал ОАО \"Челябэнергосбыт\""
         "\n"
         "\nАвтор:"
@@ -2181,19 +2322,24 @@ void __fastcall TForm1::ListBox1Click(TObject *Sender)
 
 //---------------------------------------------------------------------------
 // Процедура для NumEdit1 - TEdit вместо компонента (TNumEdit)
-void __fastcall TForm1::NumEdit1Change(TObject *Sender)
+void __fastcall TForm1::NumEdit1_oldChange(TObject *Sender)
 {
-   if (IsNumber(NumEdit1->Text, NumEdit_bUseDot, NumEdit_bUseSign)) {
+   if (IsNumber(NumEdit1->Text, NumEdit_bUseDot, NumEdit_bUseSign))
+   {
         NumEdit_TextOld = NumEdit1->Text;
         NumEdit_SelStartOld = NumEdit1->SelStart;
-    } else {
+    }
+    else
+    {
         TNotifyEvent event = NumEdit1->OnChange;
         NumEdit1->OnChange = NULL;
-        try {
+        try
+        {
             NumEdit1->Text = NumEdit_TextOld;
             NumEdit1->SelStart = NumEdit_SelStartOld;
         }
-        __finally {
+        __finally
+        {
             NumEdit1->OnChange = event;
         }
     }
@@ -2201,7 +2347,7 @@ void __fastcall TForm1::NumEdit1Change(TObject *Sender)
 
 //---------------------------------------------------------------------------
 // Процедура для NumEdit1 - TEdit вместо компонента (TNumEdit)
-void __fastcall TForm1::NumEdit1KeyPress(TObject *Sender, char &Key)
+void __fastcall TForm1::NumEdit1_oldKeyPress(TObject *Sender, char &Key)
 {
     NumEdit_SelStartOld = NumEdit1->SelStart;
 }
