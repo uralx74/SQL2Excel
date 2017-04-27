@@ -8,7 +8,8 @@
 #include "FMain.h"
 
 using namespace std;
-using namespace tasktools;
+using namespace strtools;
+using namespace fstools;
 
 //---------------------------------------------------------------------------
 #pragma package(smart_init)
@@ -215,6 +216,7 @@ void __fastcall TForm1::FormCreate(TObject *Sender)
     m_sessions.push_back(CCBSession);
     m_sessions.push_back(DBYYSession);
     m_sessions.push_back(DBWORK2Session);
+    m_sessions.push_back(ExaprodMdmSession);
 
     bool isAuthSuccess = Auth();
     bool isReadyForWork = false;
@@ -1010,7 +1012,7 @@ String TForm1::GetSQL(const String& SQLText, QueryVariables* queryParams) const
     }
 
     // Собираем вектор в строку
-    AnsiString result = Implode(sqlstring, "");
+    String result = Implode(sqlstring, "");
 
     return result;
 }

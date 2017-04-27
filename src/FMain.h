@@ -120,6 +120,7 @@ __published:	// IDE-managed Components
     TAction *ActionApplictionExit;
     TAction *ActionShowEnvironment;
     TEditAlt *NumEdit1;
+    TOraSession *ExaprodMdmSession;
 	void __fastcall FormCreate(TObject *Sender);
 	void __fastcall FormClose(TObject *Sender, TCloseAction &Action);
     void __fastcall ListBox1DrawItem(TWinControl *Control, int Index,

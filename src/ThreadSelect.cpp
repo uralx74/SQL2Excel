@@ -11,7 +11,7 @@
 #include "Dbf_Lang.hpp"
 
 
-using namespace tasktools;
+using namespace vartools;
 
 unsigned int TThreadSelect::_threadIndex = 0;
 
