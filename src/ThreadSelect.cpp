@@ -466,6 +466,12 @@ void __fastcall TThreadSelect::setStatus(_TThreadStatus status, const AnsiString
 
 }
 
+/* Синхронизация - для отладки */
+/*void __fastcall TThreadSelect::SyncDebug()
+{
+    ShowMessage(debug_message);
+}*/
+
 /* Синхронизация - изменение статуса выполнения запроса */
 void __fastcall TThreadSelect::SyncThreadChangeStatus()
 {
@@ -776,7 +782,8 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
     MSExcelWorks msexcel;
     Variant Workbook;
-    Variant Worksheet1;
+    Variant Worksheet1;     // Основной лист, куда выводятся данные
+    Variant Worksheet2;     // Лист, куда выводится текст запроса
 
     if (!fDone)           // Заполнение массива данных
     {
@@ -847,6 +854,7 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
         Variant data_parameters;
         int param_count = UserParams.size();  // Параметры отчета
         int visible_param_count = 0;
+
         for (int i=0; i <= param_count-1; i++)    // Подсчитываем кол-во отображаемых параметров
         {
             if ( UserParams[i]->isVisible() )
@@ -854,9 +862,12 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
                 visible_param_count++;
             }
         }
+
+
         if (param_count > 0)     // Список параметров для вывода в Excel
         {
             data_parameters = CreateVariantArray(visible_param_count, 1);
+
             for (int i=0; i <= param_count-1; i++)
             {
                 if ( !UserParams[i]->isVisible() )
@@ -891,14 +902,13 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
         msexcel.SetRangeFormat(range_tablebody, cf_body);
         msexcel.SetRangeFormat(range_title, cf_title);
         msexcel.SetRangeFormat(range_createtime, cf_createtime);
+
         if (param_count > 0)
         {
             msexcel.SetRangeFormat(range_parameters, cf_createtime);
         }
 
-
         Variant range_all = msexcel.GetRangeFromRange(range_tablehead, 1, 1, msexcel.GetRangeRowsCount(range_tablebody)+1, msexcel.GetRangeColumnsCount(range_tablebody));
-
 
         if (this->param_excel.title_height > 0)
         {
@@ -907,7 +917,6 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
         msexcel.SetAutoFilter(range_all);   // Включаем автофильтр
         msexcel.SetColumnsAutofit(range_all);  // Ширина ячеек по содержимому
-
 
         // Настройка заголовка (размер и тп)
         for (int i=0; i < ExcelFieldCount; i++)   // Заполнение если есть поля в ExcelFields
@@ -929,16 +938,22 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
             }
         }
 
-        //msexcel.SetRowsAutofit(range_tablehead);
-
+        msexcel.SetRowsAutofit(range_tablehead);
 
         // Выводим текст sql-запроса на второй лист
-        Variant Worksheet2 = msexcel.GetSheet(Workbook, 2);
-
+        if (msexcel.GetSheetsCount(Workbook) > 1)       // Если в книге больше одного листа, то получаем второй лист
+        {
+            Worksheet2 = msexcel.GetSheet(Workbook, 2);
+        }
+        else
+        {
+            Worksheet2 = msexcel.AddSheet(Workbook);    // иначе добавляем новый лист
+        }
 
         Variant range_sqltext;
         int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
         int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
+
         for (int i = 1; i <= n; i++)
         {
             AnsiString sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
@@ -950,14 +965,15 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
         if (DstFileName == "")
         {
+            msexcel.SetActiveWorksheet(Worksheet1);
             msexcel.SetVisible(Workbook);
         }
         else
         {
             msexcel.SaveDocument(Workbook, DstFileName);
-            VarClear(Workbook);
             VarClear(Worksheet1);
             VarClear(Worksheet2);
+            VarClear(Workbook);
             msexcel.CloseApplication();
             _resultFiles.push_back(DstFileName);
         }
@@ -978,7 +994,6 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
     VarClear(data_body);
     data_body = NULL;
-
 
 
     if (fDone)

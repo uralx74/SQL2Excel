@@ -102,6 +102,9 @@ public:
     TOraSession* __fastcall CreateOraSession(TOraSession* TemplateOraSession);
 
     void __fastcall SyncThreadChangeStatus();
+    /* Синхронизация - изменение статуса выполнения запроса */
+    //void __fastcall SyncDebug();
+    //String debug_message;
 
 private:
     HWND ParentFormHandle;

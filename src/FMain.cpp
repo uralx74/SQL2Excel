@@ -187,7 +187,7 @@ __fastcall TForm1::TForm1(TComponent* Owner)
     dangerWords.push_back("delete");
 
     //TOraLogger* Logger = &TOraLogger::getInstance();
-    OdacLog = new TOraLogger(EsaleSession, "", _username, TASKNAME, AppFullVersion);
+    OdacLog = new TOraLogger(EsaleSession, "", _username, TASKNAME, AppVer::FullVersion);
 
     AppPath = ExtractFilePath(Application->ExeName);
 }
@@ -270,7 +270,7 @@ bool __fastcall TForm1::PrepareForm()
         StatusBar1->Panels->Items[0]->Text = "Готов";
 
         TabControl1->DoubleBuffered = true;
-        Form1->Caption = "Программа для отчетов " + AppFullVersion + " - " + _username;
+        Form1->Caption = "Программа для отчетов " + AppVer::FullVersion + " - " + _username;
 
         #ifdef _DEBUG
         Form1->Caption = Form1->Caption + " (Debuging...)";
@@ -2297,7 +2297,7 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
 void __fastcall TForm1::ActionAboutAppExecute(TObject *Sender)
 {
     //
-    String MsgStr = "Программа для подготовки отчетов\nSQL2Excel v." + AppVersion + " (" + AppBuild + ")"
+    String MsgStr = "Программа для подготовки отчетов\nSQL2Excel v." + AppVer::Version + " (" + AppVer::Build + ")"
         "\n"
         "\nCopyright © 2014-2017"
         "\nЦентральный филиал ОАО \"Челябэнергосбыт\""
