@@ -699,6 +699,7 @@ void __fastcall TThreadSelect::SyncThreadChangeStatus()
 // ФОРМИРОВАНИЕ ОТЧЕТА MS EXCEL
 void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 {
+
     bool fDone = false;
 
     // Определяем количество записей
@@ -787,7 +788,7 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
     if (!fDone)           // Заполнение массива данных
     {
-        AnsiString s = "";
+        String s = "";
         OraQuery->First();	// Переходим к первой записи (на всякий случай)
         VarArrayLock(data_body);
         int i = 1;          // Пропускаем шапку таблицы
@@ -817,175 +818,190 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
         Worksheet1 = msexcel.GetSheet(Workbook, 1);
     }
 
-    if (!fDone && !VarIsEmpty(Worksheet1))  // Заполняем документ Excel
+
+    TCellFormat* cf_body = new TCellFormat();
+    TCellFormat* cf_head = new TCellFormat();
+    TCellFormat* cf_title = new TCellFormat();
+    TCellFormat* cf_createtime = new TCellFormat();
+    TCellFormat* cf_sql = new TCellFormat();
+
+    try
     {
-    //if (!VarIsEmpty(Worksheet1)) { // Заполняем документ Excel
-        TDateTime DateTime = TDateTime::CurrentDateTime();
-
-        CELLFORMAT cf_body;
-        CELLFORMAT cf_head;
-        CELLFORMAT cf_title;
-        CELLFORMAT cf_createtime;
-        CELLFORMAT cf_sql;
-
-        cf_body.BorderStyle = CELLFORMAT::xlContinuous;
-        cf_head.BorderStyle = CELLFORMAT::xlContinuous;
-        cf_head.FontStyle = cf_head.FontStyle << CELLFORMAT::fsBold;
-
-        cf_head.bWrapText = false;
-
-        cf_title.FontStyle = cf_title.FontStyle << CELLFORMAT::fsBold;
-        cf_createtime.bSetFontColor = true;
-        cf_createtime.FontColor = clRed;
-        cf_sql.bWrapText = false;
-
-        // Определяем формат данных
-        //std::vector<MSExcelWorks::CELLFORMAT> formats;
-        //formats = msexcel.GetDataFormat(ArrayDataBody, 1);
-        //std::vector<AnsiString> DataFormat;
-        //DataFormat = msexcel.GetDataFormat(ArrayDataBody, 1);
-        //for (int i=0; i  < QueryParams.size(); i++) {
-            //QueryParams[i].
-        //}
 
 
-        // Заполняем массив, со значеними параметров, заданными пользователем
-        // Возможно в будущем сделать распознавание параметра с типом "separator",
-        Variant data_parameters;
-        int param_count = UserParams.size();  // Параметры отчета
-        int visible_param_count = 0;
-
-        for (int i=0; i <= param_count-1; i++)    // Подсчитываем кол-во отображаемых параметров
+        if (!fDone && !VarIsEmpty(Worksheet1))  // Заполняем документ Excel
         {
-            if ( UserParams[i]->isVisible() )
+            TDateTime DateTime = TDateTime::CurrentDateTime();
+
+            cf_body->BorderStyle = TCellFormat::xlContinuous;
+            cf_head->BorderStyle = TCellFormat::xlContinuous;
+            cf_head->FontStyle = cf_head->FontStyle << TCellFormat::fsBold;
+    
+            cf_head->bWrapText = false;
+
+            cf_title->FontStyle = cf_title->FontStyle << TCellFormat::fsBold;
+            cf_createtime->bSetFontColor = true;
+            cf_createtime->FontColor = clRed;
+            cf_sql->bWrapText = false;
+    
+            // Определяем формат данных
+            //std::vector<MSExcelWorks::CELLFORMAT> formats;
+            //formats = msexcel.GetDataFormat(ArrayDataBody, 1);
+            //std::vector<AnsiString> DataFormat;
+            //DataFormat = msexcel.GetDataFormat(ArrayDataBody, 1);
+            //for (int i=0; i  < QueryParams.size(); i++) {
+                //QueryParams[i].
+            //}
+    
+    
+            // Заполняем массив, со значеними параметров, заданными пользователем
+            // Возможно в будущем сделать распознавание параметра с типом "separator",
+            Variant data_parameters;
+            int param_count = UserParams.size();  // Параметры отчета
+            int visible_param_count = 0;
+
+            for (int i=0; i <= param_count-1; i++)    // Подсчитываем кол-во отображаемых параметров
             {
-                visible_param_count++;
-            }
-        }
-
-
-        if (param_count > 0)     // Список параметров для вывода в Excel
-        {
-            data_parameters = CreateVariantArray(visible_param_count, 1);
-
-            for (int i=0; i <= param_count-1; i++)
-            {
-                if ( !UserParams[i]->isVisible() )
+                if ( UserParams[i]->isVisible() )
                 {
-                    continue;
-                }
-
-                if (UserParams[i]->type != "separator")
-                {
-                    data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
-                }
-                else
-                {
-                    data_parameters.PutElement("[" + UserParams[i]->getCaption() + "]", i+1, 1);
+                    visible_param_count++;
                 }
             }
-        }
-
-        // Вывод данных на лист Excel
-        Variant range_title = msexcel.WriteToCell(Worksheet1, param_excel.title_label , 1, 1);
-        Variant range_createtime = msexcel.WriteToCell(Worksheet1, "По состоянию на: " + DateTime.DateTimeString(), 2, 1);
-        Variant range_parameters;
-        if (param_count > 0)
-        {
-            range_parameters = msexcel.WriteTable(Worksheet1, data_parameters, 3, 1);
-        }
-
-        Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
-        Variant range_tablebody = msexcel.WriteTable(Worksheet1, data_body, 4 + visible_param_count, 1, &df_body);
-
-        msexcel.SetRangeFormat(range_tablehead, cf_head);
-        msexcel.SetRangeFormat(range_tablebody, cf_body);
-        msexcel.SetRangeFormat(range_title, cf_title);
-        msexcel.SetRangeFormat(range_createtime, cf_createtime);
-
-        if (param_count > 0)
-        {
-            msexcel.SetRangeFormat(range_parameters, cf_createtime);
-        }
-
-        Variant range_all = msexcel.GetRangeFromRange(range_tablehead, 1, 1, msexcel.GetRangeRowsCount(range_tablebody)+1, msexcel.GetRangeColumnsCount(range_tablebody));
-
-        if (this->param_excel.title_height > 0)
-        {
-            msexcel.SetRowHeight(range_tablehead, this->param_excel.title_height);    // Задаем высоту заголовка таблицы
-        }
-
-        msexcel.SetAutoFilter(range_all);   // Включаем автофильтр
-        msexcel.SetColumnsAutofit(range_all);  // Ширина ячеек по содержимому
-
-        // Настройка заголовка (размер и тп)
-        for (int i=0; i < ExcelFieldCount; i++)   // Заполнение если есть поля в ExcelFields
-        {    //CELLFORMAT cf_cell;
-            //cf_cell.bSetFontColor = true;
-            //cf_cell.FontColor = clGreen;
-
-            if (param_excel.Fields[i].bwraptext >= 0)
+    
+            if (param_count > 0)     // Список параметров для вывода в Excel
             {
-                CELLFORMAT cf_cell;
-                cf_cell.bWrapText = param_excel.Fields[i].bwraptext;
-                msexcel.SetRangeFormat(range_tablehead, cf_cell, 1, i+1);
+                data_parameters = CreateVariantArray(visible_param_count, 1);
+    
+                for (int i=0; i <= param_count-1; i++)
+                {
+                    if ( !UserParams[i]->isVisible() )
+                    {
+                        continue;
+                    }
+    
+                    if (UserParams[i]->type != "separator")
+                    {
+                        data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
+                    }
+                    else
+                    {
+                        data_parameters.PutElement("[" + UserParams[i]->getCaption() + "]", i+1, 1);
+                    }
+                }
+            }
+    
+            // Вывод данных на лист Excel
+            Variant range_title = msexcel.WriteToCell(Worksheet1, param_excel.title_label , 1, 1);
+            Variant range_createtime = msexcel.WriteToCell(Worksheet1, "По состоянию на: " + DateTime.DateTimeString(), 2, 1);
+            Variant range_parameters;
+            if (param_count > 0)
+            {
+                range_parameters = msexcel.WriteTable(Worksheet1, data_parameters, 3, 1);
+            }
+    
+            Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
+            Variant range_tablebody = msexcel.WriteTable(Worksheet1, data_body, 4 + visible_param_count, 1, &df_body);
+    
+            msexcel.SetRangeFormat(range_tablehead, *cf_head);
+            msexcel.SetRangeFormat(range_tablebody, *cf_body);
+            msexcel.SetRangeFormat(range_title, *cf_title);
+            msexcel.SetRangeFormat(range_createtime, *cf_createtime);
+    
+            if (param_count > 0)
+            {
+                msexcel.SetRangeFormat(range_parameters, *cf_createtime);
+            }
+    
+            Variant range_all = msexcel.GetRangeFromRange(range_tablehead, 1, 1, msexcel.GetRangeRowsCount(range_tablebody)+1, msexcel.GetRangeColumnsCount(range_tablebody));
+    
+            if (this->param_excel.title_height > 0)
+            {
+                msexcel.SetRowHeight(range_tablehead, this->param_excel.title_height);    // Задаем высоту заголовка таблицы
+            }
+    
+            msexcel.SetAutoFilter(range_all);   // Включаем автофильтр
+            msexcel.SetColumnsAutofit(range_all);  // Ширина ячеек по содержимому
+    
+            // Настройка заголовка (размер и тп)
+            for (int i=0; i < ExcelFieldCount; i++)   // Заполнение если есть поля в ExcelFields
+            {    //CELLFORMAT cf_cell;
+                //cf_cell.bSetFontColor = true;
+                //cf_cell.FontColor = clGreen;
+
+                if (param_excel.Fields[i].bwraptext >= 0)
+                {
+                    TCellFormat cf_cell;
+                    cf_cell.bWrapText = param_excel.Fields[i].bwraptext;
+                    msexcel.SetRangeFormat(range_tablehead, cf_cell, 1, i+1);
+                }
+
+                if (param_excel.Fields[i].width >= 0)
+                {
+                    msexcel.SetColumnWidth(range_tablehead, i+1, param_excel.Fields[i].width);    // Задаем высоту заголовка таблицы
+                    //msexcel.SetColumnWidth(range_tablehead, 1);    // Задаем высоту заголовка таблицы
+                }
             }
 
-            if (param_excel.Fields[i].width >= 0)
+            msexcel.SetRowsAutofit(range_tablehead);
+    
+    
+            // Выводим текст sql-запроса на второй лист
+            if (msexcel.GetSheetsCount(Workbook) > 1)       // Если в книге больше одного листа, то получаем второй лист
             {
-                msexcel.SetColumnWidth(range_tablehead, i+1, param_excel.Fields[i].width);    // Задаем высоту заголовка таблицы
-                //msexcel.SetColumnWidth(range_tablehead, 1);    // Задаем высоту заголовка таблицы
+                Worksheet2 = msexcel.GetSheet(Workbook, 2);
             }
-        }
-
-        msexcel.SetRowsAutofit(range_tablehead);
-
-        // Выводим текст sql-запроса на второй лист
-        if (msexcel.GetSheetsCount(Workbook) > 1)       // Если в книге больше одного листа, то получаем второй лист
-        {
-            Worksheet2 = msexcel.GetSheet(Workbook, 2);
-        }
-        else
-        {
-            Worksheet2 = msexcel.AddSheet(Workbook);    // иначе добавляем новый лист
-        }
-
-        Variant range_sqltext;
-        int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
-        int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
-
-        for (int i = 1; i <= n; i++)
-        {
-            AnsiString sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
-            range_sqltext = msexcel.WriteToCell(Worksheet2, sQueryPart, i, 1);
-            msexcel.SetRangeFormat(range_sqltext, cf_sql);
-        }
-
-        df_body.clear();
-
-        if (DstFileName == "")
-        {
-            msexcel.SetActiveWorksheet(Worksheet1);
+            else
+            {
+                Worksheet2 = msexcel.AddSheet(Workbook);    // иначе добавляем новый лист
+            }
+    
+            Variant range_sqltext;
+            int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
+            int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
+    
+            for (int i = 1; i <= n; i++)
+            {
+                AnsiString sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
+                range_sqltext = msexcel.WriteToCell(Worksheet2, sQueryPart, i, 1);
+                msexcel.SetRangeFormat(range_sqltext, *cf_sql);
+            }
+    
+            df_body.clear();
+    
+            if (DstFileName == "")
+            {
+                msexcel.SetActiveWorksheet(Worksheet1);
             msexcel.SetVisible(Workbook);
-        }
-        else
-        {
-            msexcel.SaveDocument(Workbook, DstFileName);
-            VarClear(Worksheet1);
-            VarClear(Worksheet2);
-            VarClear(Workbook);
-            msexcel.CloseApplication();
-            _resultFiles.push_back(DstFileName);
-        }
-
-
-        //if (ExportMode == EM_EXCEL_FILE) {
-        //    msexcel.SaveAsDocument(Workbook, DstFileName);
-        //    msexcel.CloseExcel();
-        //} else {
+            }
+            else
+            {
+                msexcel.SaveDocument(Workbook, DstFileName);
+                VarClear(Worksheet1);
+                VarClear(Worksheet2);
+                VarClear(Workbook);
+                msexcel.CloseApplication();
+                _resultFiles.push_back(DstFileName);
+            }
+    
+    
+            //if (ExportMode == EM_EXCEL_FILE) {
+            //    msexcel.SaveAsDocument(Workbook, DstFileName);
+            //    msexcel.CloseExcel();
+            //} else {
             //Workbook.OlePropertySet("Name", "blabla");
         //    msexcel.SetVisibleExcel(true, true);
-        //}
+            //}
+        }
+    }
+    catch(Exception &e)
+    {
+        delete cf_body;
+        delete cf_head;
+        delete cf_title;
+        delete cf_createtime;
+        delete cf_sql;
+
+        throw Exception(e);
     }
 
     // Освобождение памяти
@@ -1000,6 +1016,8 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
     {
         throw Exception("Прерывание.");
     }
+
+
 
 }
 
