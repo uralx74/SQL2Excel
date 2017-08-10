@@ -111,7 +111,8 @@ private:
     //AnsiString AppPath;     // Путь к приложению
     TDocumentWriter documentWriter;
 
-    void DoExportToWordTemplate();   //
+    void __fastcall DoExportToWordTemplate();   //
+    void __fastcall DoExportToExcel(); // Заполнение отчета Excel
 
 
 
@@ -131,7 +132,9 @@ private:
     AnsiString _secondaryQueryText;
     AnsiString _reportName;
 
-    EXPORT_PARAMS_EXCEL param_excel;
+    TExcelExportParams param_excel;
+    //EXPORT_PARAMS_EXCEL param_excel;
+
     EXPORT_PARAMS_WORD param_word;      //
     EXPORT_PARAMS_DBASE param_dbase;
 
@@ -140,7 +143,7 @@ private:
 
     void SetThreadOpt(THREADOPTIONS* threadopt);
     void __fastcall Execute();
-    void __fastcall ExportToExcel(TOraQuery *OraQuery); // Заполнение отчета Excel
+    //void __fastcall ExportToExcel(TOraQuery *OraQuery); // Заполнение отчета Excel
     void __fastcall ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields);
     void __fastcall ExportToDBF(TOraQuery *OraQuery);   // Заполнение DBF-файла
     //void __fastcall ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields);  // Заполнение отчета Word на базе шаблона

@@ -395,7 +395,7 @@ int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQuer
             if (query.param_excel.Fields.size() > 0)
             {                 // Если не заполнена строка, то брать из параметра выгрузки в Excel
                 query.fieldslist = "";
-                vector<EXCELFIELD>::iterator cur;
+                vector<TExcelField>::iterator cur;
                 for (cur = query.param_excel.Fields.begin(); cur < query.param_excel.Fields.end() - 1; cur++)
                 {
                     query.fieldslist += cur->name + " | ";
@@ -576,11 +576,11 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 
                 queryitem->param_excel.title_label = msxml.GetAttributeValue(node, "title", queryitem->queryname);
                 queryitem->param_excel.title_height = msxml.GetAttributeValue(node, "title-height", -1); // Высота заголовка в строках
-                queryitem->param_excel.template_name =  filetools::ExpandFileNameCustom( msxml.GetAttributeValue(node, "template", AnsiString("")), AppPath);
+                queryitem->param_excel.templateFilename =  filetools::ExpandFileNameCustom( msxml.GetAttributeValue(node, "template", AnsiString("")), AppPath);
                 queryitem->param_excel.fUnbounded = msxml.GetAttributeValue(node, "unbounded", false);
                 queryitem->param_excel.table_range_name = msxml.GetAttributeValue(node, "table_range", AnsiString(""));
 
-                std::vector<EXCELFIELD>* ListFields = &queryitem->param_excel.Fields;
+                std::vector<TExcelField>* ListFields = &queryitem->param_excel.Fields;
 
                 Variant subnode = msxml.GetFirstNode(node);
                 //while (!subnode.IsEmpty())
@@ -588,33 +588,53 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                 {
                     if (msxml.GetNodeName(subnode) == "field")
                     {
-                        EXCELFIELD field;
+                        TExcelField field;
                         field.format = LowerCase(msxml.GetAttributeValue(subnode, "format"));
                         field.name = msxml.GetAttributeValue(subnode, "name");
                         field.width = msxml.GetAttributeValue(subnode, "width", -1);    // Ширина столбца
-                        attribute = LowerCase(Trim(msxml.GetAttributeValue(subnode, "wraptext")));  // перенос по словам
+
+                        attribute = LowerCase(Trim(msxml.GetAttributeValue(subnode, "wraptext")));  // перенос по словам в шапке таблицы
                         if (attribute == "false")
                         {
-                            field.bwraptext = 0;
+                            field.bwraptext_head = 0;
                         }
                         else if (attribute == "true")
                         {
-                            field.bwraptext = 1;
+                            field.bwraptext_head = 1;
                         }
                         else
                         {
-                            field.bwraptext = -1;
+                            field.bwraptext_head = -1;
+                        }
+
+
+                        attribute = LowerCase(Trim(msxml.GetAttributeValue(subnode, "wraptext_body")));  // перенос по словам в теле таблицы
+                        if (attribute == "false")
+                        {
+                            field.bwraptext_body = 0;
+                        }
+                        else if (attribute == "true")
+                        {
+                            field.bwraptext_body = 1;
+                        }
+                        else
+                        {
+                            field.bwraptext_body = -1;
                         }
 
                         ListFields->push_back(field);
+
                     }
+
+
+
 
                     subnode = msxml.GetNextNode(subnode);
                 }
 
                 if (queryitem->param_excel.id == queryitem->exportparam_id)
                 {
-                    if (queryitem->param_excel.template_name == "")    // В шаблон если указан шаблон
+                    if (queryitem->param_excel.templateFilename == "")    // В шаблон если указан шаблон
                     {
                         queryitem->DefaultExportType = EM_EXCEL_BLANK;
                     } else {
@@ -715,7 +735,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 
         if (queryitem->DefaultExportType == EM_UNDEFINITE)
         {
-            if (queryitem->param_excel.template_name == "")    // В шаблон если указан шаблон
+            if (queryitem->param_excel.templateFilename == "")    // В шаблон если указан шаблон
             {
                 queryitem->DefaultExportType = EM_EXCEL_BLANK;
             }
@@ -881,7 +901,7 @@ void __fastcall TForm1::ActionAsProcedureExecute(TObject *Sender)
  */
 void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
 {
-    if ( CurrentQueryItem->param_excel.template_name == "" )
+    if ( CurrentQueryItem->param_excel.templateFilename == "" )
     {
         Run(EM_EXCEL_BLANK, 1);
     }
@@ -896,7 +916,7 @@ void __fastcall TForm1::ActionExportExcelFileExecute(TObject *Sender)
  */
 void __fastcall TForm1::ActionExportExcelBlankExecute(TObject *Sender)
 {
-    if ( CurrentQueryItem->param_excel.template_name == "" )
+    if ( CurrentQueryItem->param_excel.templateFilename == "" )
     {
         Run(EM_EXCEL_BLANK, 0);
     }

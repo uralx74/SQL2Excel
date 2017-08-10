@@ -28,7 +28,7 @@
 } EXCELFIELD;  */
 
 // Структура для хранения параметров экспорта в MS Excel
-typedef struct  {
+/*typedef struct  {
     AnsiString id;
     AnsiString label;
     //bool fDefault;
@@ -38,7 +38,7 @@ typedef struct  {
     std::vector<EXCELFIELD> Fields;     // Список полей для экспорта в файл MS Excel
     AnsiString table_range_name;        // Имя диапазона табличной части (при выводе в шаблон)
     bool fUnbounded;                    // Флаг того, что диапазон table_range_name будет увеличен, в соответствии с количеством записей в источнике данных
-} EXPORT_PARAMS_EXCEL;
+} EXPORT_PARAMS_EXCEL; */
 
 // Структура для хранения параметров экспорта в MS Word
 typedef struct {

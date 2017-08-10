@@ -99,32 +99,46 @@ void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
 
     switch (threadopt->exportmode) {
     case EM_EXCEL_BLANK:
+    {
         // Наименование отчета
         this->param_excel.title_label = threadopt->queryitem->param_excel.title_label != ""? threadopt->queryitem->param_excel.title_label : threadopt->queryitem->queryname;  // Наименование отчета
         this->param_excel.title_height = threadopt->queryitem->param_excel.title_height;      // Высота заголовка таблицы MS Excel
         this->param_excel.Fields = threadopt->queryitem->param_excel.Fields;  // Вектор полей для экспорта в MS Excel
+
+        //int k = threadopt->queryitem->param_excel.Fields.size();
+
         this->UserParams = threadopt->queryitem->UserParams;
+        break;
+    }
     case EM_EXCEL_TEMPLATE:
-        this->param_excel.template_name = threadopt->queryitem->param_excel.template_name;        // Тестирование печать в шаблон
+    {
+        this->param_excel.templateFilename = threadopt->queryitem->param_excel.templateFilename;        // Тестирование печать в шаблон
         this->param_excel.table_range_name = threadopt->queryitem->param_excel.table_range_name;
         this->param_excel.fUnbounded = threadopt->queryitem->param_excel.fUnbounded;        // Тестирование печать в шаблон
         //this->param_word.filter_main_field= threadopt->queryitem->param_word.filter_main_field;
         //this->param_word.filter_sec_field = threadopt->queryitem->param_word.filter_sec_field;
         //this->param_word.filter_infix_sec_field = threadopt->queryitem->param_word.filter_infix_sec_field;
         break;
+    }
     case EM_DBASE4_FILE:
+    {
         this->param_dbase.Fields = threadopt->queryitem->param_dbase.Fields;  // Вектор полей для экспорта в DBF
         this->param_dbase.fAllowUnassignedFields = threadopt->queryitem->param_dbase.fAllowUnassignedFields;
         break;
+    }
     case EM_PROCEDURE:
+    {
         break;
+    }
     case EM_WORD_TEMPLATE:
+    {
         this->param_word.page_per_doc = threadopt->queryitem->param_word.page_per_doc;              // Количество страниц на документ MS Word
         this->param_word.template_name = threadopt->queryitem->param_word.template_name;        // Тестирование печать в шаблон
         this->param_word.filter_main_field= threadopt->queryitem->param_word.filter_main_field;
         this->param_word.filter_sec_field = threadopt->queryitem->param_word.filter_sec_field;
         this->param_word.filter_infix_sec_field = threadopt->queryitem->param_word.filter_infix_sec_field;
         break;
+    }
     }
 }
 
@@ -253,7 +267,7 @@ void __fastcall TThreadSelect::Execute()
     }
 
     if (!this->Terminated && _secondaryQueryText != "")     // Если задан второй запрос
-    {    // Пробуем выполниь вспомогательный запрос
+    {    // Пробуем выполнить вспомогательный запрос
         try
         {
             OraQuerySecondary = OpenOraQuery(ThreadOraSession2, _secondaryQueryText, false);
@@ -322,7 +336,7 @@ void __fastcall TThreadSelect::Execute()
                 break;
             case EM_EXCEL_BLANK:
                 CoInitialize(NULL);
-                ExportToExcel(OraQueryMain);
+                DoExportToExcel();
                 CoUninitialize();
                 break;
             //case EM_EXCEL_FILE_TEMPLATE:
@@ -388,9 +402,78 @@ void __fastcall TThreadSelect::Execute()
     Synchronize(SyncThreadChangeStatus);
 }
 
+/* Процедура экспорта в чистый файл Excel
+*/
+void __fastcall TThreadSelect::DoExportToExcel()
+{
+
+    // Заполняем массив, со значеними параметров, заданными пользователем
+    // Возможно в будущем сделать распознавание параметра с типом "separator",
+    Variant data_parameters;
+    int param_count = UserParams.size();  // Параметры отчета
+    int visible_param_count = 0;
+
+    for (int i=0; i <= param_count-1; i++)    // Подсчитываем кол-во отображаемых параметров
+    {
+        if ( UserParams[i]->isVisible() )
+        {
+            visible_param_count++;
+        }
+    }
+
+    if (param_count > 0)     // Список параметров для вывода в Excel
+    {
+        data_parameters = CreateVariantArray(visible_param_count, 1);
+        //data_parameters = CreateVariantArray(2, 1);
+
+
+        for (int i=0; i <= param_count-1; i++)
+        {
+            if ( !UserParams[i]->isVisible() )
+            {
+                continue;
+            }
+
+            if (UserParams[i]->type != "separator")
+            {
+                data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
+            }
+            else
+            {
+                data_parameters.PutElement("[" + UserParams[i]->getCaption() + "]", i+1, 1);
+            }
+        }
+    }
+
+
+    Variant sql_text;
+    {
+        // Массив для sql-текста
+        Variant range_sqltext;
+        int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
+        int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
+
+        sql_text = CreateVariantArray(n, 1);
+
+        for (int i = 1; i <= n; i++)
+        {
+            String sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
+            sql_text.PutElement(sQueryPart, i, 1);
+        }
+    }
+
+    // Добавляем источники данных
+    param_excel.addTableDataSet(OraQueryMain, "table_body", "table_column_");
+    param_excel.addTableVtArray(data_parameters, "report_parameters");
+    param_excel.addTableVtArray(sql_text, "report_query_text");
+
+    documentWriter.ExportToExcel(&param_excel);
+}
+
+
 /* Процедура экспорта в шаблон Word
    Примечание: Следует перенести в отдельный модуль */
-void TThreadSelect::DoExportToWordTemplate()
+void __fastcall TThreadSelect::DoExportToWordTemplate()
 {
     if ( OraQueryMain->RecordCount == 0)
     {
@@ -697,7 +780,7 @@ void __fastcall TThreadSelect::SyncThreadChangeStatus()
 
 //---------------------------------------------------------------------------
 // ФОРМИРОВАНИЕ ОТЧЕТА MS EXCEL
-void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
+/*void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 {
 
     bool fDone = false;
@@ -867,18 +950,18 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
                     visible_param_count++;
                 }
             }
-    
+
             if (param_count > 0)     // Список параметров для вывода в Excel
             {
                 data_parameters = CreateVariantArray(visible_param_count, 1);
-    
+
                 for (int i=0; i <= param_count-1; i++)
                 {
                     if ( !UserParams[i]->isVisible() )
                     {
                         continue;
                     }
-    
+
                     if (UserParams[i]->type != "separator")
                     {
                         data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
@@ -889,7 +972,7 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
                     }
                 }
             }
-    
+
             // Вывод данных на лист Excel
             Variant range_title = msexcel.WriteToCell(Worksheet1, param_excel.title_label , 1, 1);
             Variant range_createtime = msexcel.WriteToCell(Worksheet1, "По состоянию на: " + DateTime.DateTimeString(), 2, 1);
@@ -898,7 +981,7 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
             {
                 range_parameters = msexcel.WriteTable(Worksheet1, data_parameters, 3, 1);
             }
-    
+
             Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
             Variant range_tablebody = msexcel.WriteTable(Worksheet1, data_body, 4 + visible_param_count, 1, &df_body);
     
@@ -928,10 +1011,10 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
                 //cf_cell.bSetFontColor = true;
                 //cf_cell.FontColor = clGreen;
 
-                if (param_excel.Fields[i].bwraptext >= 0)
+                if (param_excel.Fields[i].bwraptext_title >= 0)
                 {
                     TCellFormat cf_cell;
-                    cf_cell.bWrapText = param_excel.Fields[i].bwraptext;
+                    cf_cell.bWrapText = param_excel.Fields[i].bwraptext_title;
                     msexcel.SetRangeFormat(range_tablehead, cf_cell, 1, i+1);
                 }
 
@@ -1019,13 +1102,13 @@ void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 
 
 
-}
+} */
 
 //---------------------------------------------------------------------------
 // Заполнение Excel файла с использованием шаблона xlt
 void __fastcall TThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields)
 {
-    String TemplateFullName = param_excel.template_name; // Абсолютный путь к файлу-шаблону
+    String TemplateFullName = param_excel.templateFilename; // Абсолютный путь к файлу-шаблону
 
     // Открываем шаблон MS Excel
     MSExcelWorks msexcel;

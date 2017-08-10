@@ -44,7 +44,8 @@ public:
     AnsiString exportparam_id;
 
 
-    EXPORT_PARAMS_EXCEL param_excel;
+    TExcelExportParams param_excel;
+    //EXPORT_PARAMS_EXCEL param_excel;
     EXPORT_PARAMS_DBASE param_dbase;
     EXPORT_PARAMS_WORD param_word;
     EXPORT_PARAMS_EXECUTE param_execute;
