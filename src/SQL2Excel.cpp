@@ -25,7 +25,7 @@
 USEFORM("FMain.cpp", Form1);
 USEFORM("FormWait.cpp", Form_Wait);
 USEFORM("FShowQuery.cpp", FormShowQuery);
-//USEFORM("FormLogin.cpp", LoginForm);
+USEFORM("..\..\util\FormLogin\formlogin.cpp", LoginForm);
 //---------------------------------------------------------------------------
 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
@@ -130,9 +130,8 @@ WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 	{
         Application->Initialize();
 		Application->CreateForm(__classid(TForm1), &Form1);
-         Application->CreateForm(__classid(TFormShowQuery), &FormShowQuery);
-         //Application->CreateForm(__classid(TLoginForm), &LoginForm);
-         Application->Run();
+        Application->CreateForm(__classid(TFormShowQuery), &FormShowQuery);
+        Application->Run();
 	}
 	catch (Exception &exception)
 	{

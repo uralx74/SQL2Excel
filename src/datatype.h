@@ -41,7 +41,7 @@
 } EXPORT_PARAMS_EXCEL; */
 
 // Структура для хранения параметров экспорта в MS Word
-typedef struct {
+/*typedef struct {
     AnsiString id;
     AnsiString label;
     //bool fDefault;
@@ -50,7 +50,7 @@ typedef struct {
     AnsiString filter_main_field;      // Имя поля из основного запроса для сравнения со значением поля word_filter_sec_field
     AnsiString filter_sec_field;       // Имя поля из вспомогательного запроса (см. word_filter_main_field)
     AnsiString filter_infix_sec_field; // Имя поля из вспомогательного запроса, значение которого будет присоединено к имени результирующего файла
-} EXPORT_PARAMS_WORD;
+} EXPORT_PARAMS_WORD;    */
 
 // Структура для хранения параметров режима экспорта - Выполнить
 typedef struct {
@@ -58,12 +58,15 @@ typedef struct {
 } EXPORT_PARAMS_EXECUTE;
 
 // Структура для хранения параметров экспорта в DBF
-typedef struct {    // Для описания формата ячеек в Excel
-    AnsiString id;
-    AnsiString label;
+/*typedef struct {    // Для описания формата ячеек в Excel
+    String id;
+    String label;
     //bool fDefault;
     bool fAllowUnassignedFields;
-    std::vector<DBASEFIELD> Fields;    // Список полей для экспрта в файл DBF
-} EXPORT_PARAMS_DBASE;
+    TDbfFieldList Fields;    // Список полей для экспрта в файл DBF
+    //std::vector<DBASEFIELD> Fields;    // Список полей для экспрта в файл DBF
+} EXPORT_PARAMS_DBASE;  */
+
+
 
 #endif // DatatypeH

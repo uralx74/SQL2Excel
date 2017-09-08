@@ -45,9 +45,10 @@ public:
 
 
     TExcelExportParams param_excel;
-    //EXPORT_PARAMS_EXCEL param_excel;
-    EXPORT_PARAMS_DBASE param_dbase;
-    EXPORT_PARAMS_WORD param_word;
+    TDbaseExportParams param_dbase;
+    TWordExportParams param_word;
+
+    //EXPORT_PARAMS_WORD param_word;
     EXPORT_PARAMS_EXECUTE param_execute;
 
     QueryVariables UserParams;    // Задаваемые параметры к запрос

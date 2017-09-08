@@ -650,7 +650,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                     break;
                 }
                 queryitem->fDbfFile = true;
-                queryitem->param_dbase.fAllowUnassignedFields = msxml.GetAttributeValue(node, "allowunassigned", false);
+                queryitem->param_dbase.fDisableUnassignedFields = msxml.GetAttributeValue(node, "disableunassigned", false);
 
                 queryitem->param_dbase.id = "m_" + msxml.GetAttributeValue(node, "id");
                 if (queryitem->param_dbase.id == "m_")
@@ -659,7 +659,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                 }
 
                 // Парсим список полей dbase4
-                std::vector<DBASEFIELD>* ListFields = &queryitem->param_dbase.Fields;
+                TDbfFieldList* ListFields = &queryitem->param_dbase.Fields;
                 Variant subnode = msxml.GetFirstNode(node);
                 // Закомментировано 2016-11-17
                 //while (!subnode.IsEmpty())
@@ -667,8 +667,8 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                 {
                     if (msxml.GetNodeName(subnode) == "field")
                     {
-                        DBASEFIELD field;
-                        field.type = LowerCase(msxml.GetAttributeValue(subnode, "type"));
+                        TDbfField field;
+                        field.type = UpperCase(msxml.GetAttributeValue(subnode, "type"))[1];
                         field.name = LowerCase(msxml.GetAttributeValue(subnode, "name"));
                         field.length = msxml.GetAttributeValue(subnode, "length", 0);
                         field.decimals = msxml.GetAttributeValue(subnode, "decimals", 0);
@@ -697,11 +697,11 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                     queryitem->param_word.id = IntToStr(unassigned_id++);
                 }
 
-                queryitem->param_word.template_name = filetools::ExpandFileNameCustom(msxml.GetAttributeValue(node, "template"), AppPath);
+                queryitem->param_word.templateFilename = filetools::ExpandFileNameCustom(msxml.GetAttributeValue(node, "template"), AppPath);
                 queryitem->param_word.filter_main_field = msxml.GetAttributeValue(node, "filter_main_field", AnsiString(""));
                 queryitem->param_word.filter_sec_field = msxml.GetAttributeValue(node, "filter_sec_field", AnsiString(""));
-                queryitem->param_word.filter_infix_sec_field = msxml.GetAttributeValue(node, "filter_infix_sec_field", AnsiString(""));
-                queryitem->param_word.page_per_doc = msxml.GetAttributeValue(node, "page_per_doc", 0);
+                //queryitem->param_word.filter_infix_sec_field = msxml.GetAttributeValue(node, "filter_infix_sec_field", AnsiString(""));
+                queryitem->param_word.pagePerDocument = msxml.GetAttributeValue(node, "page_per_doc", 0);
 
                 if (queryitem->param_word.id == queryitem->exportparam_id)
                 {
@@ -837,7 +837,7 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
         {
             // Проверяем на сущестовование файла-шаблона
             //String TemplateFullName = calculateValue(CurrentQueryItem->param_word.template_name);
-            String TemplateFullName = CurrentQueryItem->param_word.template_name;
+            String TemplateFullName = CurrentQueryItem->param_word.templateFilename;
             if( !FileExists(TemplateFullName) )
             {
                 MessageBoxStop("Файл шаблона " + TemplateFullName + " не найден.");

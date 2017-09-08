@@ -7,8 +7,6 @@
 #include "ThreadSelect.h"
 #include "FMain.h"
 
-#include "dbf.hpp"
-#include "Dbf_Lang.hpp"
 
 
 using namespace vartools;
@@ -112,18 +110,18 @@ void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
     }
     case EM_EXCEL_TEMPLATE:
     {
-        this->param_excel.templateFilename = threadopt->queryitem->param_excel.templateFilename;        // Тестирование печать в шаблон
-        this->param_excel.table_range_name = threadopt->queryitem->param_excel.table_range_name;
+        this->param_excel = threadopt->queryitem->param_excel;        //
+        /*this->param_excel.templateFilename = threadopt->queryitem->param_excel.templateFilename;        // Тестирование печать в шаблон
+        this->param_excel.table_range_name = threadopt->queryitem->param_excel.table_range_name;   2017-09-08*/
         this->param_excel.fUnbounded = threadopt->queryitem->param_excel.fUnbounded;        // Тестирование печать в шаблон
-        //this->param_word.filter_main_field= threadopt->queryitem->param_word.filter_main_field;
-        //this->param_word.filter_sec_field = threadopt->queryitem->param_word.filter_sec_field;
-        //this->param_word.filter_infix_sec_field = threadopt->queryitem->param_word.filter_infix_sec_field;
         break;
     }
     case EM_DBASE4_FILE:
     {
-        this->param_dbase.Fields = threadopt->queryitem->param_dbase.Fields;  // Вектор полей для экспорта в DBF
-        this->param_dbase.fAllowUnassignedFields = threadopt->queryitem->param_dbase.fAllowUnassignedFields;
+        this->param_dbase = threadopt->queryitem->param_dbase;
+        //this->param_dbase.Fields = threadopt->queryitem->param_dbase.Fields;  // Вектор полей для экспорта в DBF
+        //this->param_dbase.fDisableUnassignedFields = threadopt->queryitem->param_dbase.fDisableUnassignedFields;
+        this->param_dbase.resultFilename = threadopt->dstfilename; // 2017-09-08
         break;
     }
     case EM_PROCEDURE:
@@ -132,11 +130,12 @@ void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
     }
     case EM_WORD_TEMPLATE:
     {
-        this->param_word.page_per_doc = threadopt->queryitem->param_word.page_per_doc;              // Количество страниц на документ MS Word
+        this->param_word = threadopt->queryitem->param_word;
+        /*this->param_word.pagePerDocument = threadopt->queryitem->param_word.pagePerDocument;              // Количество страниц на документ MS Word
         this->param_word.template_name = threadopt->queryitem->param_word.template_name;        // Тестирование печать в шаблон
         this->param_word.filter_main_field= threadopt->queryitem->param_word.filter_main_field;
-        this->param_word.filter_sec_field = threadopt->queryitem->param_word.filter_sec_field;
-        this->param_word.filter_infix_sec_field = threadopt->queryitem->param_word.filter_infix_sec_field;
+        this->param_word.filter_sec_field = threadopt->queryitem->param_word.filter_sec_field;            */
+        //this->param_word.filter_infix_sec_field = threadopt->queryitem->param_word.filter_infix_sec_field;
         break;
     }
     }
@@ -331,7 +330,8 @@ void __fastcall TThreadSelect::Execute()
             switch (ExportMode) {
             case EM_EXCEL_TEMPLATE:
                 CoInitialize(NULL);
-                ExportToExcelTemplate(OraQueryMain, OraQuerySecondary);
+                DoExportToExcel();
+                //ExportToExcelTemplate(OraQueryMain, OraQuerySecondary);
                 CoUninitialize();
                 break;
             case EM_EXCEL_BLANK:
@@ -346,7 +346,7 @@ void __fastcall TThreadSelect::Execute()
                 //ExportToExcel(OraQueryMain);
                 //break;
             case EM_DBASE4_FILE:
-                ExportToDBF(OraQueryMain);
+                DoExportToDbf();
                 break;
             case EM_WORD_TEMPLATE:
                 CoInitialize(NULL);
@@ -468,6 +468,8 @@ void __fastcall TThreadSelect::DoExportToExcel()
     param_excel.addTableVtArray(sql_text, "report_query_text");
 
     documentWriter.ExportToExcel(&param_excel);
+    _resultFiles = documentWriter._result.resultFiles;
+
 }
 
 
@@ -480,14 +482,16 @@ void __fastcall TThreadSelect::DoExportToWordTemplate()
         return;
     }
 
-    TWordExportParams wordExportParams;
-    wordExportParams.pagePerDocument = param_word.page_per_doc;
+    TWordExportParams* wordExportParams = &param_word;
+
+    //TWordExportParams wordExportParams;
+    //wordExportParams.pagePerDocument = param_word.pagePerDocument;
 
     /* Присоединяем источники данных */
-    wordExportParams.addFormtextDataSet(OraQuerySecondary);     // Общая информация по участку
+    wordExportParams->addFormtextDataSet(OraQuerySecondary);     // Общая информация по участку
     //wordExportParams.addSingleTextDataSet(OraQuerySecondary, "rec_");  // Информация по реестру
-    wordExportParams.addMergeDataSet(OraQueryMain);
-    wordExportParams.templateFilename =  param_word.template_name;
+    wordExportParams->addMergeDataSet(OraQueryMain);
+    //wordExportParams->templateFilename =  param_word.templateFilename;
 
 
     bool bFilterExist = param_word.filter_main_field != "" && param_word.filter_sec_field != "";    // Если в параметрах задан фильтр, то считаем, что установлен фильтр
@@ -515,19 +519,36 @@ void __fastcall TThreadSelect::DoExportToWordTemplate()
 
             if ( OraQueryMain->RecordCount > 0 )         // Если есть записи, то формируем документ
             {
-                wordExportParams.resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_" + IntToStr(i++)+ "_[:counter].doc";
-                documentWriter.ExportToWordTemplate(&wordExportParams);
+                wordExportParams->resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_" + IntToStr(i++)+ "_[:counter].doc";
+                documentWriter.ExportToWordTemplate(wordExportParams);
+                _resultFiles = documentWriter._result.resultFiles;
             }
             OraQuerySecondary->Next();
         }
     }
     else
     {   // если фильтр не задан, делаем экпорт как есть
-        wordExportParams.resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_[:counter].doc";
-        documentWriter.ExportToWordTemplate(&wordExportParams);
+        wordExportParams->resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_[:counter].doc";
+        documentWriter.ExportToWordTemplate(wordExportParams);
+        _resultFiles = documentWriter._result.resultFiles;
     }
+}
+
+/* Процедура экспорта в dbf-файл
+   Примечание: Следует перенести в отдельный модуль */
+void __fastcall TThreadSelect::DoExportToDbf()
+{
+    if ( OraQueryMain->RecordCount == 0)
+    {
+        return;
+    }
+    param_dbase.srcDataSet = OraQueryMain;  // Возможно перенести в SetThreadOpt 2017-09-08
+
+    documentWriter.ExportToDbf(&param_dbase);
+    _resultFiles = documentWriter._result.resultFiles;
 
 }
+
 
 TThreadSelectMessage::TThreadSelectMessage(unsigned int status, const AnsiString& message, std::vector<String> files) :
     _status(status),
@@ -562,762 +583,4 @@ void __fastcall TThreadSelect::SyncThreadChangeStatus()
     Form1->threadListener(_threadId, message);
 }
 
-/*
- Заполнение шаблона MS Word
- QueryMerge - основной запрос, используется в качестве источника данных при слиянии
- QueryFormFields - вспомогательный запрос, используется в качестве источника данных
- при замене полей FormFields в шаблоне MS Word. Может быть NULL.
- */
-/*void __fastcall ThreadSelect::ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields)
-{
-
-
-    String TemplateFullName = AppPath + param_word.template_name; // Абсолютный путь к файлу-шаблону
-    String SavePath = ExtractFilePath(DstFileName);         // Путь для сохранения результатов
-    String ResultFileNamePrefix = ExtractFileName(DstFileName);     // Префикс имени файла-результата
-
-    std::vector<String> vFormFields;    // Вектор с именами файлов - результатов
-
-    int FieldCount = QueryMerge->FieldCount;
-
-    MSWordWorks msword;
-    Variant Document;   // Шаблон
-
-    try {
-        msword.OpenWord();
-    } catch (Exception &e) {
-        _threadMessage = "Неудалось создать экземпляр приложения Microsoft Word."
-            "\nПожалуйста, обратитесь к системному администратору.\n" + e.Message;
-        throw Exception(_threadMessage);
-    }
-
-    try {
-        //msword.SetVisible(true);
-        Document =  msword.OpenDocument(TemplateFullName, false);
-        //msword.SetDisplayAlerts(true);
-    } catch (Exception &e) {
-        msword.CloseApplication();
-        VarClear(Document);
-        _threadMessage = "Неудалось открыть шаблон " + TemplateFullName +
-            "\nПожалуйста, обратитесь к системному администратору.\n" + e.Message;
-        throw Exception(_threadMessage);
-    }
-
-    vFormFields = msword.GetFormFields(Document);
-    int FormFieldsCount = vFormFields.size();
-
-    // ??? Нужно ли учитывать QueryFormFields->RecordCount ?
-    bool bFilterExist = param_word.filter_main_field != "" && param_word.filter_sec_field != "";    // Если в параметрах задан фильтр, то считаем, что установлен фильтр
-
-
-    if (QueryFormFields == NULL)
-    {
-        // Если задан один запрос, то делаем только слияние
-        // Слияние документа Word с таблицей
-        if (QueryMerge->RecordCount > 0)
-        {
-            _resultFiles = msword.ExportToWordFields(QueryMerge, Document, SavePath + ResultFileNamePrefix + "_[:counter].doc", param_word.page_per_doc);
-        }
-    }
-    else
-    {
-        // Если задано два запроса, то:
-        // 1. если задан фильтр в цикле задаем фильтр основному запросу
-        // 2. подставляем значения в FormFields-поля в шаблоне
-        // 3. делаем слияние
-        int n_doc = 0;  // Порядковый номер процедуры слияния (используется в имени файлов результатов)
-        int nPadLength = IntToStr(QueryFormFields->RecordCount).Length();
-        for( ; !QueryFormFields->Eof; QueryFormFields->Next()) { // Цикл по полям FormFields
-
-            // Если задан фильтр, применяем его к основному запросу
-            if (bFilterExist)  // Если во вспомогательном запросе больше 1 строки, то применяем фильтр
-            {
-                try
-                {
-                    String sFilter = param_word.filter_main_field + "='" + QueryFormFields->FieldByName(param_word.filter_sec_field)->AsString + "'";
-                    QueryMerge->Filtered = false;
-                    QueryMerge->Filter = sFilter;
-                    QueryMerge->Filtered = true;
-                }
-                catch ( Exception &e )
-                {
-                    QueryMerge->Filtered = false;
-                    _threadStatus = WM_THREAD_ERROR_IN_PROCESS;
-                    _threadMessage = "Проверьте корректность параметров фильтра в параметрах экспорта или обратитесь к системному администратору.\n" + e.Message;
-                    break;
-                }
-
-                if (QueryMerge->RecordCount == 0)         // Если нет записей, то следующий шаг цикла
-                {
-                    continue;
-                }
-            }
-
-            if (VarIsEmpty(Document))           // Если шаблон не открыт, открываем его (требуется на втором шаге цикла)
-            {
-                Document = msword.OpenDocument(TemplateFullName, false);
-            }
-
-            // Подставляем значения FormFields полей в шаблоне MS Word
-            for (int i = 0; i < FormFieldsCount ; i++)   		// Перебираем FormFields, подставляем соответствующие значения из QueryFormFields
-            {
-                String FormFieldName = vFormFields[i];
-                try
-                {
-                    if ( FormFieldName.Pos("[IMG]") == 1 ) // ЗДЕСЬ ДОДЕЛАТЬ, учитывать параметры [IMG WIDTH=150 HEIGHT=200]
-                    {
-                        String FieldName = FormFieldName.SubString(6, FormFieldName.Length()-5);
-                        String ImgPath = "";
-                        TField* Field = QueryFormFields->Fields->FindField(FieldName);
-                        if (Field)
-                        {
-                            ImgPath = AppPath + QueryFormFields->Fields->FieldByName(FieldName)->AsString;
-
-
-                            // Вставляем изображение в поле
-                            if (FileExists(ImgPath))
-                            {
-                                msword.SetPictureToField(Document, FieldName, ImgPath);
-                                //msword.SetPictureToField(Document, FieldName, ImgPath, 80, 80);
-                            }
-                            else
-                            {
-                                // Файл не найден или throw
-                                msword.SetTextToFieldF(Document, FieldName, "Файл изображения не найден! (" + ImgPath + ")");
-                                //
-                                // !!!!!!!!!!!!!!!!!!!!
-                                // Может быть лучше throw ???
-
-                            }
-                        }
-                    }
-                    else
-                    {
-                        TField* Field = QueryFormFields->Fields->FindField(FormFieldName);
-                        if (Field)
-                        {
-                            msword.SetTextToFieldF(Document, FormFieldName, Field->AsString);
-                        }
-                    }
-                }
-                catch (Exception &e)
-                {
-                    _threadStatus = WM_THREAD_ERROR_IN_PROCESS_ALT;
-                    _threadMessage = "Возникла ошибка при замене полей FormFields в шаблоне """ + TemplateFullName + """"
-                        ", поле """ + FormFieldName + """."
-                        "\nОбратитесь к системному администратору."
-                        "\n" + e.Message;
-                    break;
-                }
-            }
-
-            // Формируем инфикс к имени файла
-            AnsiString sFileNameInfix;
-            if (param_word.filter_infix_sec_field != "")
-            {
-                try
-                {
-                    // Получаем инфикс из поля QueryFormFields
-                    sFileNameInfix = Trim(QueryFormFields->FieldByName(param_word.filter_infix_sec_field)->AsString);
-                }
-                catch (...)
-                {
-                    // Если произошла ошибка, то используем порядковый номер очередного слияния n_doc
-                }
-                if (sFileNameInfix == "")
-                {     //
-                    sFileNameInfix = StrPadL(IntToStr(n_doc++), nPadLength, "0");
-                }
-
-            }
-            else
-            {
-                // Используем в качестве инфикса порядковый номер очередного слияния
-                sFileNameInfix = StrPadL(IntToStr(n_doc++), nPadLength, "0");
-            }
-
-            // Слияние документа Word с таблицей
-            if (QueryMerge->RecordCount > 0)
-            {
-                std::vector<AnsiString> vNew;
-
-                try
-                {
-                    vNew = msword.ExportToWordFields(QueryMerge, Document, SavePath + ResultFileNamePrefix + "_[:counter]" + sFileNameInfix + "_", param_word.page_per_doc);
-                }
-                catch (Exception &e)
-                {
-                    _threadStatus = WM_THREAD_ERROR_IN_PROCESS;
-                    _threadMessage = "В процессе слияния документа с источником данных произошла ошибка."
-                        "\nОбратитесь к системному администратору."
-                        "\n" + e.Message;
-                    break;
-                }
-
-                _resultFiles.insert(_resultFiles.end(), vNew.begin(), vNew.end());
-                vNew.clear();
-            }
-
-            msword.CloseDocument(Document);
-            VarClear(Document);
-
-            if (!bFilterExist)  // Если фильтр не установлен, тогда выходим из цикла
-            {
-                break;
-            }
-        }
-    }
-
-    if (!VarIsEmpty(Document))      // Если шаблон открыт
-    {
-        msword.CloseDocument(Document);
-        VarClear(Document);
-    }
-    msword.CloseApplication();
-
-    
-}   */
-
-//---------------------------------------------------------------------------
-// ФОРМИРОВАНИЕ ОТЧЕТА MS EXCEL
-/*void __fastcall TThreadSelect::ExportToExcel(TOraQuery *OraQuery)
-{
-
-    bool fDone = false;
-
-    // Определяем количество записей
-    OraQuery->Last();
-	int RecCount = OraQuery->RecordCount;
-
-    // Определяем количество полей
-    int FieldCount = OraQuery->FieldCount;
-
-    Variant data_body;
-    Variant data_head;
-    DATAFORMAT df_body;
-    df_body.reserve(FieldCount);
-
-    int ExcelFieldCount = param_excel.Fields.size();
-
-    try      // Определение списка полей, формирование шапки таблицы, определение типа данных
-    {
-        //data_body = CreateVariantArray(RecCount, FieldCount);  // Создаем массив для таблицы
-        //data_head = CreateVariantArray(1, FieldCount);  // Шапка таблицы
-
-        if (ExcelFieldCount >= FieldCount)   // Заполнение если есть поля в ExcelFields
-        {
-            data_body = CreateVariantArray(RecCount, ExcelFieldCount);     // Создаем массив для таблицы
-            data_head = CreateVariantArray(1, ExcelFieldCount);            // Шапка таблицы
-
-            for (unsigned int j = 0; j < ExcelFieldCount; j++)
-            {
-                data_head.PutElement(param_excel.Fields[j].name, 1, j+1);
-                df_body.push_back(param_excel.Fields[j].format);
-            }
-        }
-        else
-        {
-            data_body = CreateVariantArray(RecCount, FieldCount);  // Создаем массив для таблицы
-            data_head = CreateVariantArray(1, FieldCount);         // Шапка таблицы
-
-            // Формируем шапку таблицы
-            for (int j = 1; j <= FieldCount; j++ )  		// Перебираем все поля
-            {
-                TField* field = OraQuery->Fields->FieldByNumber(j);
-                // Задаем формат столбцов в таблице Excel
-                AnsiString sCellFormat;
-
-                data_head.PutElement(field->DisplayName, 1, j);
-                switch (field->DataType) {  // Нужно тестирование и доработка (добавить форматы и тд.)
-                case ftString:
-                    sCellFormat = "@";
-                    break;
-                case ftTime:
-                    sCellFormat = "чч:мм:сс";
-                    break;
-                case ftDate:
-                    sCellFormat = "ДД.ММ.ГГГГ";
-                    break;
-                case ftDateTime:
-                    sCellFormat = "ДД.ММ.ГГГГ";
-                    break;
-                case ftCurrency: case ftFloat:
-                    sCellFormat = "0.00";
-                    break;
-                case ftSmallint: case ftInteger: case ftLargeint:
-                    sCellFormat = "0";
-                    break;
-                default:
-                    sCellFormat = "@";
-                }
-                df_body.push_back(sCellFormat);
-	        }
-        }
-    }
-    catch (Exception &e)
-    {
-        VarClear(data_head);
-        VarClear(data_body);
-
-        _threadMessage = e.Message;
-        throw Exception(_threadMessage);
-        //fDone = true;
-    }
-
-    MSExcelWorks msexcel;
-    Variant Workbook;
-    Variant Worksheet1;     // Основной лист, куда выводятся данные
-    Variant Worksheet2;     // Лист, куда выводится текст запроса
-
-    if (!fDone)           // Заполнение массива данных
-    {
-        String s = "";
-        OraQuery->First();	// Переходим к первой записи (на всякий случай)
-        VarArrayLock(data_body);
-        int i = 1;          // Пропускаем шапку таблицы
-	    while (!OraQuery->Eof)
-        {
-		    for (int j = 1; j <= FieldCount; j++ )
-            {
-        	    s = OraQuery->Fields->FieldByNumber(j)->AsString;
-                data_body.PutElement(s, i, j);
-            }
-            OraQuery->Next();  // Переходим к следующей записи
-            i++;
-	    }
-        VarArrayUnlock(data_body);
-        try
-        {
-            msexcel.OpenApplication();
-            Workbook = msexcel.OpenDocument();
-        }
-        catch (Exception &e)
-        {
-            VarClear(data_head);
-            VarClear(data_body);
-            _threadMessage = e.Message;
-            throw Exception(_threadMessage);
-        }
-        Worksheet1 = msexcel.GetSheet(Workbook, 1);
-    }
-
-
-    TCellFormat* cf_body = new TCellFormat();
-    TCellFormat* cf_head = new TCellFormat();
-    TCellFormat* cf_title = new TCellFormat();
-    TCellFormat* cf_createtime = new TCellFormat();
-    TCellFormat* cf_sql = new TCellFormat();
-
-    try
-    {
-
-
-        if (!fDone && !VarIsEmpty(Worksheet1))  // Заполняем документ Excel
-        {
-            TDateTime DateTime = TDateTime::CurrentDateTime();
-
-            cf_body->BorderStyle = TCellFormat::xlContinuous;
-            cf_head->BorderStyle = TCellFormat::xlContinuous;
-            cf_head->FontStyle = cf_head->FontStyle << TCellFormat::fsBold;
-    
-            cf_head->bWrapText = false;
-
-            cf_title->FontStyle = cf_title->FontStyle << TCellFormat::fsBold;
-            cf_createtime->bSetFontColor = true;
-            cf_createtime->FontColor = clRed;
-            cf_sql->bWrapText = false;
-    
-            // Определяем формат данных
-            //std::vector<MSExcelWorks::CELLFORMAT> formats;
-            //formats = msexcel.GetDataFormat(ArrayDataBody, 1);
-            //std::vector<AnsiString> DataFormat;
-            //DataFormat = msexcel.GetDataFormat(ArrayDataBody, 1);
-            //for (int i=0; i  < QueryParams.size(); i++) {
-                //QueryParams[i].
-            //}
-    
-    
-            // Заполняем массив, со значеними параметров, заданными пользователем
-            // Возможно в будущем сделать распознавание параметра с типом "separator",
-            Variant data_parameters;
-            int param_count = UserParams.size();  // Параметры отчета
-            int visible_param_count = 0;
-
-            for (int i=0; i <= param_count-1; i++)    // Подсчитываем кол-во отображаемых параметров
-            {
-                if ( UserParams[i]->isVisible() )
-                {
-                    visible_param_count++;
-                }
-            }
-
-            if (param_count > 0)     // Список параметров для вывода в Excel
-            {
-                data_parameters = CreateVariantArray(visible_param_count, 1);
-
-                for (int i=0; i <= param_count-1; i++)
-                {
-                    if ( !UserParams[i]->isVisible() )
-                    {
-                        continue;
-                    }
-
-                    if (UserParams[i]->type != "separator")
-                    {
-                        data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
-                    }
-                    else
-                    {
-                        data_parameters.PutElement("[" + UserParams[i]->getCaption() + "]", i+1, 1);
-                    }
-                }
-            }
-
-            // Вывод данных на лист Excel
-            Variant range_title = msexcel.WriteToCell(Worksheet1, param_excel.title_label , 1, 1);
-            Variant range_createtime = msexcel.WriteToCell(Worksheet1, "По состоянию на: " + DateTime.DateTimeString(), 2, 1);
-            Variant range_parameters;
-            if (param_count > 0)
-            {
-                range_parameters = msexcel.WriteTable(Worksheet1, data_parameters, 3, 1);
-            }
-
-            Variant range_tablehead = msexcel.WriteTable(Worksheet1, data_head, 3 + visible_param_count, 1);
-            Variant range_tablebody = msexcel.WriteTable(Worksheet1, data_body, 4 + visible_param_count, 1, &df_body);
-    
-            msexcel.SetRangeFormat(range_tablehead, *cf_head);
-            msexcel.SetRangeFormat(range_tablebody, *cf_body);
-            msexcel.SetRangeFormat(range_title, *cf_title);
-            msexcel.SetRangeFormat(range_createtime, *cf_createtime);
-    
-            if (param_count > 0)
-            {
-                msexcel.SetRangeFormat(range_parameters, *cf_createtime);
-            }
-    
-            Variant range_all = msexcel.GetRangeFromRange(range_tablehead, 1, 1, msexcel.GetRangeRowsCount(range_tablebody)+1, msexcel.GetRangeColumnsCount(range_tablebody));
-    
-            if (this->param_excel.title_height > 0)
-            {
-                msexcel.SetRowHeight(range_tablehead, this->param_excel.title_height);    // Задаем высоту заголовка таблицы
-            }
-    
-            msexcel.SetAutoFilter(range_all);   // Включаем автофильтр
-            msexcel.SetColumnsAutofit(range_all);  // Ширина ячеек по содержимому
-    
-            // Настройка заголовка (размер и тп)
-            for (int i=0; i < ExcelFieldCount; i++)   // Заполнение если есть поля в ExcelFields
-            {    //CELLFORMAT cf_cell;
-                //cf_cell.bSetFontColor = true;
-                //cf_cell.FontColor = clGreen;
-
-                if (param_excel.Fields[i].bwraptext_title >= 0)
-                {
-                    TCellFormat cf_cell;
-                    cf_cell.bWrapText = param_excel.Fields[i].bwraptext_title;
-                    msexcel.SetRangeFormat(range_tablehead, cf_cell, 1, i+1);
-                }
-
-                if (param_excel.Fields[i].width >= 0)
-                {
-                    msexcel.SetColumnWidth(range_tablehead, i+1, param_excel.Fields[i].width);    // Задаем высоту заголовка таблицы
-                    //msexcel.SetColumnWidth(range_tablehead, 1);    // Задаем высоту заголовка таблицы
-                }
-            }
-
-            msexcel.SetRowsAutofit(range_tablehead);
-    
-    
-            // Выводим текст sql-запроса на второй лист
-            if (msexcel.GetSheetsCount(Workbook) > 1)       // Если в книге больше одного листа, то получаем второй лист
-            {
-                Worksheet2 = msexcel.GetSheet(Workbook, 2);
-            }
-            else
-            {
-                Worksheet2 = msexcel.AddSheet(Workbook);    // иначе добавляем новый лист
-            }
-    
-            Variant range_sqltext;
-            int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
-            int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
-    
-            for (int i = 1; i <= n; i++)
-            {
-                AnsiString sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
-                range_sqltext = msexcel.WriteToCell(Worksheet2, sQueryPart, i, 1);
-                msexcel.SetRangeFormat(range_sqltext, *cf_sql);
-            }
-    
-            df_body.clear();
-    
-            if (DstFileName == "")
-            {
-                msexcel.SetActiveWorksheet(Worksheet1);
-            msexcel.SetVisible(Workbook);
-            }
-            else
-            {
-                msexcel.SaveDocument(Workbook, DstFileName);
-                VarClear(Worksheet1);
-                VarClear(Worksheet2);
-                VarClear(Workbook);
-                msexcel.CloseApplication();
-                _resultFiles.push_back(DstFileName);
-            }
-    
-    
-            //if (ExportMode == EM_EXCEL_FILE) {
-            //    msexcel.SaveAsDocument(Workbook, DstFileName);
-            //    msexcel.CloseExcel();
-            //} else {
-            //Workbook.OlePropertySet("Name", "blabla");
-        //    msexcel.SetVisibleExcel(true, true);
-            //}
-        }
-    }
-    catch(Exception &e)
-    {
-        delete cf_body;
-        delete cf_head;
-        delete cf_title;
-        delete cf_createtime;
-        delete cf_sql;
-
-        throw Exception(e);
-    }
-
-    // Освобождение памяти
-    VarClear(data_head);
-    data_head = NULL;
-
-    VarClear(data_body);
-    data_body = NULL;
-
-
-    if (fDone)
-    {
-        throw Exception("Прерывание.");
-    }
-
-
-
-} */
-
-//---------------------------------------------------------------------------
-// Заполнение Excel файла с использованием шаблона xlt
-void __fastcall TThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields)
-{
-    String TemplateFullName = param_excel.templateFilename; // Абсолютный путь к файлу-шаблону
-
-    // Открываем шаблон MS Excel
-    MSExcelWorks msexcel;
-    Variant Workbook;
-    Variant Worksheet;
-
-    try
-    {
-        msexcel.OpenApplication();
-        Workbook = msexcel.OpenDocument(TemplateFullName);
-        Worksheet = msexcel.GetSheet(Workbook, 1);
-    }
-    catch (Exception &e)
-    {
-        try
-        {
-            msexcel.CloseApplication();
-        }
-        catch (...)
-        {
-        }
-
-        _threadMessage = "Ошибка при открытии файла-шаблона " + TemplateFullName + ".\nОбратитесь к системному администратору.";
-        throw Exception(_threadMessage);
-    }
-
-    // Сначала делаем замену полей
-    try
-    {
-        if (QueryFields != NULL)
-        {
-            msexcel.ExportToExcelFields(QueryFields, Worksheet);
-        }
-    }
-    catch (Exception &e)
-    {
-        msexcel.CloseApplication();
-        _threadMessage = e.Message;
-        throw Exception(e);
-    }
-
-    // Затем вставляем табличную часть
-    try
-    {
-        if (QueryTable != NULL && param_excel.table_range_name != "") // Должно быть задано имя диапазона таблично части
-        {
-            msexcel.ExportToExcelTable(QueryTable, Worksheet, param_excel.table_range_name, param_excel.fUnbounded);
-        }
-    }
-    catch (Exception &e)
-    {
-        try
-        {
-            msexcel.CloseApplication();
-        }
-        catch (...)
-        {
-        }
-        _threadMessage = e.Message;
-        throw Exception(e);
-    }
-
-    if (DstFileName == "")         // Просто открываем документ, если имя файла-результата не задано
-    {
-        msexcel.SetVisible(Workbook);
-    }
-    else
-    {                        // иначе сохраняем в файл
-        try
-        {
-            msexcel.SaveDocument(Workbook, DstFileName);
-            msexcel.CloseApplication();
-            _resultFiles.push_back(DstFileName);
-        }
-        catch (Exception &e)
-        {
-            try
-            {
-                msexcel.CloseApplication();
-            }
-            catch (...)
-            {
-            }
-            _threadMessage = "Ошибка при сохранении результата в файл " + DstFileName + ".\n" + e.Message;
-            throw Exception(_threadMessage);
-        }
-    }
-
-    // В дальнейшем сделать аналогично выгрузке в MS Word
-    // обьединение двух таблиц QueryFields и QueryTable
-
-}
-
-//---------------------------------------------------------------------------
-// Заполнение DBF-файла
-// Переделать эту функцию с использование компонента TDbf
-void __fastcall TThreadSelect::ExportToDBF(TOraQuery *OraQuery)
-{
-    /*TStringList* ListFields;
-    int n = this->param_dbase.Fields.size();
-    if (n > 0)    // Формируем список полей для экспорта в DBF ("Имя;Тип;Длина;Длина дробной части")
-    {
-        ListFields = new TStringList();
-        for (int i = 0; i < n; i++)
-        {
-            ListFields->Add(param_dbase.Fields[i].name + ";" + param_dbase.Fields[i].type + ";"+ param_dbase.Fields[i].length + ";" + param_dbase.Fields[i].decimals);
-        }
-    }
-    else
-    {
-        _threadMessage = "Не задан список полей в параметрах экспорта."
-            "\nПожалуйста, обратитесь к системному администратору.";
-        throw Exception(_threadMessage);
-    }*/
-
-    // Это условие убрано, в связи с тем, что некоторые поля могут оставаться пустыми
-    if (param_dbase.Fields.size() > OraQuery->FieldCount && !param_dbase.fAllowUnassignedFields)
-    {
-        _threadMessage = "Количество требуемых полей превышает количество полей в источнике данных."
-            "\nПожалуйста, обратитесь к системному администратору.";
-        throw Exception(_threadMessage);
-    }
-
-    if (param_dbase.Fields.size() == 0)
-    {
-        _threadMessage = "Не задан список полей в параметрах экспорта."
-            "\nПожалуйста, обратитесь к системному администратору.";
-        throw Exception(_threadMessage);
-    }
-
-    // Создаем dbf-файл назначения
-    TDbf* pTable = new TDbf(NULL);
-
-    //pTableDst->TableLevel = 7; // required for AutoInc field
-    pTable->TableLevel = 4;
-    pTable->LanguageID = DbfLangId_RUS_866;
-
-    pTable->TableName = ExtractFileName(DstFileName);
-    pTable->FilePathFull = ExtractFilePath(DstFileName);
-
-
-    // Создаем определение полей таблицы из параметров
-    TDbfFieldDefs* TempFieldDefs = new TDbfFieldDefs(NULL);
-
-    if (TempFieldDefs == NULL)
-    {
-        _threadMessage = "Can't create storage.";
-        throw Exception(_threadMessage);
-    }
-
-    for(std::vector<DBASEFIELD>::iterator it = param_dbase.Fields.begin(); it < param_dbase.Fields.end(); it++ )
-    {
-        TDbfFieldDef* TempFieldDef = TempFieldDefs->AddFieldDef();
-        TempFieldDef->FieldName = it->name;
-        //TempFieldDef->Required = true;
-        //TempFieldDef->FieldType = Field->type;    // Use FieldType if Field->Type is TFieldType else use NativeFieldType
-        TempFieldDef->NativeFieldType = it->type[1];
-        TempFieldDef->Size = it->length;
-        TempFieldDef->Precision = it->decimals;
-    }
-
-    if (TempFieldDefs->Count == 0)
-    {
-        delete pTable;
-        _threadMessage = "Не удалось загрузить описание полей.";
-        throw Exception(_threadMessage);
-    }
-
-    pTable->CreateTableEx(TempFieldDefs);
-    pTable->Exclusive = true;
-    try
-    {
-        pTable->Open();
-    }
-    catch (Exception &e)
-    {
-        _threadMessage = e.Message;
-    }
-
-    // Запись данных в таблицу
-    try
-    {
-	    while ( !OraQuery->Eof )
-        {
-            pTable->Append();
-		    for (int j = 1; j <= OraQuery->FieldCount; j++ )
-            {
-                pTable->Fields->FieldByNumber(j)->Value = OraQuery->Fields->FieldByNumber(j)->Value;
-            }
-            OraQuery->Next();  // Переходим к следующей записи
-	    }
-        pTable->Post();
-        pTable->Close();
-
-        _resultFiles.push_back(DstFileName);
-
-    }
-    catch(Exception &e)
-    {
-        pTable->Close();
-
-        delete TempFieldDefs;
-        delete pTable;
-
-        _threadMessage = e.Message;
-        throw Exception(e);
-    }
-
-    delete TempFieldDefs;
-    delete pTable;
-}
 

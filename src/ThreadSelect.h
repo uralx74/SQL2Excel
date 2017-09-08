@@ -13,8 +13,6 @@
 #include "QueryItem.h"
 #include "Parameter.h"
 #include "..\util\odacutils.h"
-#include "..\util\MSExcelWorks.h"
-#include "..\util\MSWordWorks.h"
 #include "taskutils.h"
 #include "DocumentWriter.h"
 
@@ -113,6 +111,7 @@ private:
 
     void __fastcall DoExportToWordTemplate();   //
     void __fastcall DoExportToExcel(); // Заполнение отчета Excel
+    void __fastcall DoExportToDbf();
 
 
 
@@ -133,25 +132,18 @@ private:
     AnsiString _reportName;
 
     TExcelExportParams param_excel;
-    //EXPORT_PARAMS_EXCEL param_excel;
+    TWordExportParams param_word;
+    TDbaseExportParams param_dbase;    // 2017-09-08
 
-    EXPORT_PARAMS_WORD param_word;      //
-    EXPORT_PARAMS_DBASE param_dbase;
 
     std::vector<TParamRecord*> UserParams;    // Задаваемые параметры к запросу
 
 
     void SetThreadOpt(THREADOPTIONS* threadopt);
     void __fastcall Execute();
-    //void __fastcall ExportToExcel(TOraQuery *OraQuery); // Заполнение отчета Excel
-    void __fastcall ExportToExcelTemplate(TOraQuery *QueryTable, TOraQuery *QueryFields);
-    void __fastcall ExportToDBF(TOraQuery *OraQuery);   // Заполнение DBF-файла
-    //void __fastcall ExportToWordTemplate(TOraQuery *QueryMerge, TOraQuery *QueryFormFields);  // Заполнение отчета Word на базе шаблона
     void __fastcall setStatus(_TThreadStatus status, const AnsiString& message = "");
 
     void (*f)(const String&, int);
-
-    //Variant ExportToExcelTable1(TOraQuery* QTable, Variant Worksheet, bool bUnbounded = true);   // Временно !!!!!!!!!!!
 
 };
 //---------------------------------------------------------------------------
