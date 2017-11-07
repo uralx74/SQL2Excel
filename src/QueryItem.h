@@ -27,21 +27,23 @@ typedef std::vector<TParamRecord*>::iterator QueryVariablesIterator;
 class TQueryItem
 {
 public:
-    AnsiString tabname;     // Наименование раздел
-    AnsiString taborder;    // Порядковый номер вкладки
-    AnsiString queryid;     // id запроса
-    AnsiString querytext;   // Текст запроса
-    AnsiString querytext2;  // Текст второго запроса (используется в отчетах в MS Word)
-    AnsiString queryname;   // Наименование запроса
-    AnsiString dbname;      // Индекс базы данных
-    AnsiString dbname2;     // Индекс базы данных для второго запроса (используется в отчетах в MS Word)
-    AnsiString sortorder;   // Порядок сортировки
-    AnsiString spr_task_sql2excel_id;
-    AnsiString fieldslist;  // Строка - перечень записей (комментарий к запросу)
+    String tabname;     // Наименование раздел
+    String taborder;    // Порядковый номер вкладки
+    String queryid;     // id запроса
+    String querytext1;   // Текст запроса
+    String querytext2;  // Текст второго запроса (используется в отчетах в MS Word)
+    String querytext3;  // 
+    String queryname;   // Наименование запроса
+    String dbname1;      // Индекс базы данных
+    String dbname2;     // Индекс базы данных для второго запроса (используется в отчетах в MS Word)
+    String dbname3;      // Индекс базы данных
+    String sortorder;   // Порядок сортировки
+    //AnsiString spr_task_sql2excel_id;
+    String fieldslist;  // Строка - перечень записей (комментарий к запросу)
 
     EXPORTMODE DefaultExportType;   // Тип отчета для выгрузки "По умолчанию"
 
-    AnsiString exportparam_id;
+    String exportparam_id;
 
 
     TExcelExportParams param_excel;

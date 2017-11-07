@@ -41,6 +41,7 @@
 #include "DateUtils.hpp"
 #include "taskutils.h"
 #include "formlogin.h"
+#include <DBClient.hpp>
 
 class LvParameter: public Parameter
 {
@@ -51,12 +52,12 @@ public:
 Variables systemVariables;         // Переменные системные
 Variables systemFunctions;         // Переменные системные
 
-typedef std::vector<TQueryItem*> QueryItemList;
+typedef std::vector<TQueryItem*> TQueryItemList;
 
 class TTabItem {    // Структура, для хранения структуры вкладок
 public:
-    AnsiString name;
-    QueryItemList queryitem;
+    String name;
+    TQueryItemList queryitem;
 };
 
 //---------------------------------------------------------------------------
@@ -121,6 +122,28 @@ __published:	// IDE-managed Components
     TAction *ActionShowEnvironment;
     TEditAlt *NumEdit1;
     TOraSession *ExaprodMdmSession;
+    TOraStoredProc *getQueryListProc;
+    TAction *ActionShowLinkingQuery;
+    TStringField *getQueryListProcQUERYNAME;
+    TStringField *getQueryListProcFIELDSLIST;
+    TStringField *getQueryListProcUSERLIST;
+    TIntegerField *getQueryListProcSORTORDER;
+    TFloatField *getQueryListProcQUERY_ID;
+    TStringField *getQueryListProcTABNAME;
+    TIntegerField *getQueryListProcTABORDER;
+    TStringField *getQueryListProcUSERPARAMS;
+    TStringField *getQueryListProcEXPORTPARAMS;
+    TStringField *getQueryListProcOWNER_INFO;
+    TStringField *getQueryListProcAVGTIMEWRK;
+    TIntegerField *getQueryListProcVISIBLE_FLG;
+    TMemoField *getQueryListProcQUERY_1;
+    TMemoField *getQueryListProcQUERY_2;
+    TMemoField *getQueryListProcQUERY_3;
+    TIntegerField *getQueryListProcDBNAME_1;
+    TIntegerField *getQueryListProcDBNAME_2;
+    TIntegerField *getQueryListProcDBNAME_3;
+    TDateTimeField *getQueryListProcCRE_DTTM;
+    TOraQuery *getQueryListProc2;
 	void __fastcall FormCreate(TObject *Sender);
 	void __fastcall FormClose(TObject *Sender, TCloseAction &Action);
     void __fastcall ListBox1DrawItem(TWinControl *Control, int Index,
@@ -157,6 +180,7 @@ __published:	// IDE-managed Components
     void __fastcall ActionAsProcedureExecute(TObject *Sender);
     void __fastcall ActionApplictionExitExecute(TObject *Sender);
     void __fastcall ActionShowEnvironmentExecute(TObject *Sender);
+    void __fastcall ActionShowLinkingQueryExecute(TObject *Sender);
 private:	// User declarations
 
     //void xx (const String& s, int a);
@@ -182,7 +206,7 @@ private:	// User declarations
 
     String __fastcall GetValue(String value);
    // AnsiString GetDefinedValue(AnsiString value);       // Оставлено для совместимости. В последущем полностью заменить GetValue
-    void __fastcall DoExport(THREADOPTIONS* threadopt);
+    void __fastcall DoExport(TThreadOptions* threadopt);
     bool __fastcall CheckLock(int dbindex);
     void __fastcall Run(EXPORTMODE ExportMode, int Tag = 0);
 
@@ -190,7 +214,7 @@ private:	// User declarations
     void InitSystemVariables(); // Инициализация системных переменных
     void InitCustomVariables(); // Инициализация переменных среды
 
-    int __fastcall DataSetToQueryList(TOraQuery* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list);
+    int __fastcall DataSetToQueryList(TDataSet* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list);
     TColor __fastcall ColorByIndex(int index);     // Возвращает цвет по индексу
 
 

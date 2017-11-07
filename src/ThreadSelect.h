@@ -16,6 +16,9 @@
 #include "taskutils.h"
 #include "DocumentWriter.h"
 
+#include <DB.hpp>
+#include "MemDS.hpp"
+
 
 class TThreadSelectMessage
 {
@@ -44,8 +47,9 @@ typedef enum _TThreadStatus {
     WM_THREAD_ERROR_BD_CANT_CONNECT,
     WM_THREAD_ERROR_PARAMS_INCORRECT,
     WM_THREAD_ERROR_NULL_RESULTS,
-    WM_THREAD_ERROR_OPEN_QUERY,
+    WM_THREAD_ERROR_OPEN_QUERY1,
     WM_THREAD_ERROR_OPEN_QUERY2,
+    WM_THREAD_ERROR_OPEN_QUERY3,
     WM_THREAD_ERROR_TOO_MORE_RESULTS,
     WM_THREAD_ERROR_IN_PROCESS,         // Поток - ошибка при обработке данных
     WM_THREAD_ERROR_IN_PROCESS_ALT,     // Поток - ошибка при обработке данных 
@@ -61,33 +65,23 @@ typedef enum _TThreadStatus {
 
 //class TLogger;  // опережающее объявление
 
-/*
-// Режим экспорта данных
-typedef enum _EXPORTMODE {
-    EM_UNDEFINITE = 0,
-    EM_PROCEDURE,   // Выполнить как процедуру
-    EM_EXCEL_BLANK,     // Экспорт в пустой файл MS Excel
-    EM_EXCEL_TEMPLATE,  // Экспорт в шаблон MS Excel
-    EM_DBASE4_FILE,     // Экспорт в DBF
-    EM_WORD_TEMPLATE    // Экспорт в шаблон MS Word
-} EXPORTMODE;
-*/
-
 class TQueryItem;
 
 typedef struct {
     AnsiString dstfilename;
     EXPORTMODE exportmode;
     String queryName;   // Наименование запроа
-    String querytext;   // Текст основного запроса
+    String querytext1;   // Текст основного запроса
     String querytext2;  // Текст дополнительного запроса
+    String querytext3;  // Текст дополнительного запроса
 
     TQueryItem* queryitem;   // ЭТО ВОЗМОЖНО ЗАМЕНИТЬ ОТДЕЛЬНЫМИ ЗНАЧЕНИЯМИ?
     void* ParentFormHandle;
-    TOraSession* TemplateOraSession;
+    TOraSession* TemplateOraSession1;
     TOraSession* TemplateOraSession2;
+    TOraSession* TemplateOraSession3;
 
-} THREADOPTIONS;
+} TThreadOptions;
 
 
 //---------------------------------------------------------------------------
@@ -95,7 +89,7 @@ class TThreadSelect : public TThread
 {
 public:
     //__fastcall ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt, void (*f)(const String&, int));
-    __fastcall TThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt);
+    __fastcall TThreadSelect(bool CreateSuspended, TThreadOptions* threadopt);
     __fastcall ~TThreadSelect();
     TOraSession* __fastcall CreateOraSession(TOraSession* TemplateOraSession);
 
@@ -106,29 +100,34 @@ public:
 
 private:
     HWND ParentFormHandle;
-    //AnsiString AppPath;     // Путь к приложению
     TDocumentWriter documentWriter;
 
     void __fastcall DoExportToWordTemplate();   //
-    void __fastcall DoExportToExcel(); // Заполнение отчета Excel
+    void __fastcall DoExportToExcel(bool toTemplate = false); // Заполнение отчета Excel
     void __fastcall DoExportToDbf();
 
 
 
     EXPORTMODE ExportMode;
     AnsiString DstFileName;             // Имя файла-назначения
-    TOraSession* ThreadOraSession;
-    TOraSession* ThreadOraSession2; // Вторая сессия для второго запроса (используется в отчетах в MS Word)
-    TOraQuery* OraQueryMain;
-    TOraQuery* OraQuerySecondary;   // Второй запрос (используется в отчетах в MS Word)
+    TOraSession* _oraSession1;
+    TOraSession* _oraSession2; // Вторая сессия для второго запроса (используется в отчетах в MS Word)
+    TOraSession* _oraSession3; // Вторая сессия для второго запроса (используется в отчетах в MS Word)
+    TOraQuery* _oraQuery1;
+    TOraQuery* _oraQuery2;   // Второй запрос (используется в отчетах в MS Word)
+    TOraQuery* _oraQuery3;   // Второй запрос (используется в отчетах в MS Word)
+
+    //TDataSet* JoinDataset(TDataSet* dsLeft, TDataSet* dsRight, String LeftKey, String RigthKey);
+
     static unsigned int _threadIndex;   // Счетчик потоков
     unsigned int _threadId;  // Идентификатор потока
     TThreadStatus _threadStatus;
     AnsiString _threadMessage;
 
     std::vector<String> _resultFiles;   // Список имен файлов - результатов
-    AnsiString _mainQueryText;
-    AnsiString _secondaryQueryText;
+    AnsiString _queryText1;
+    AnsiString _queryText2;
+    AnsiString _queryText3;
     AnsiString _reportName;
 
     TExcelExportParams param_excel;
@@ -139,7 +138,7 @@ private:
     std::vector<TParamRecord*> UserParams;    // Задаваемые параметры к запросу
 
 
-    void SetThreadOpt(THREADOPTIONS* threadopt);
+    void SetThreadOpt(TThreadOptions* threadopt);
     void __fastcall Execute();
     void __fastcall setStatus(_TThreadStatus status, const AnsiString& message = "");
 

@@ -302,7 +302,7 @@ bool __fastcall TForm1::Auth()
 int __fastcall TForm1::LoadQueryList()
 {
     // Выбор запросов в соответствии с ролью пользователя и его именем
-    AnsiString Str = "select * from ("
+   /* String Str = "select * from ("
         " select * from ("
         " SELECT qt.*, nvl(SYS.DBA_ROLE_PRIVS.GRANTED_ROLE, null) GRANTED_ROLE, row_number() over (partition by SPR_TASK_SQL2EXCEL_ID order by queryname) N FROM " + mainSpr + " qt "
         " LEFT join SYS.DBA_ROLE_PRIVS on GRANTEE = '" + _username + "'"
@@ -314,35 +314,40 @@ int __fastcall TForm1::LoadQueryList()
 
     //AnsiString Str = "SELECT * FROM spr_task_sql2excel where fvisible=1 and upper(userlist) like '%USER=\"" + Username + "\"%' order by taborder,tabname,sortorder,queryname";
 
-    TOraQuery *OraQuery_SprTask = OpenOraQuery(EsaleSession, Str);
+    TOraQuery *OraQuery_SprTask = OpenOraQuery(EsaleSession, Str); */
 
-    if (OraQuery_SprTask == NULL)
+    int RecCount = 0;
+    try
     {
-        delete OraQuery_SprTask;
+
+       //String k = getQueryListProc->Session->Username;
+
+        getQueryListProc->ParamByName("p_username")->AsString = _username;
+        getQueryListProc->Open();
+
+        int RecCount = getQueryListProc->RecordCount;
+        if ( RecCount <= 0 )
+        {
+            return -2;
+        }
+    }
+    catch(...)
+    {
         return -1;
     }
 
-
-    int RecCount = OraQuery_SprTask->RecordCount;
-    if (RecCount <= 0)
-    {
-        delete OraQuery_SprTask;
-        return -2;
-    }
-
-    DataSetToQueryList(OraQuery_SprTask, QueryList, TabList);
+    DataSetToQueryList(getQueryListProc, QueryList, TabList);
 
     // Очистка памяти
-    OraQuery_SprTask->Close();
-    delete OraQuery_SprTask;
-	OraQuery_SprTask = NULL;
+    getQueryListProc->Close();
 
     return RecCount;
+
 }
 
 //---------------------------------------------------------------------------
 // Загружает список запросов в вектор
-int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list)
+int __fastcall TForm1::DataSetToQueryList(TDataSet* oraquery, std::vector<TQueryItem>& query_list, std::vector<TTabItem>& tab_list)
 {
     int RecCount = oraquery->RecordCount;
     if (RecCount <= 0)
@@ -370,15 +375,18 @@ int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQuer
 
         query.param_excel.title_height = -1;
         query.taborder  = oraquery->FieldByName("taborder")->AsString;
-        query.queryid   = oraquery->FieldByName("SPR_TASK_SQL2EXCEL_ID")->AsString;
-        query.querytext = oraquery->FieldByName("sqltext1")->AsString + oraquery->FieldByName("sqltext2")->AsString
-            + oraquery->FieldByName("sqltext3")->AsString + oraquery->FieldByName("sqltext4")->AsString;
-        query.querytext2 = oraquery->FieldByName("sqltext2_1")->AsString;
+        query.queryid   = oraquery->FieldByName("QUERY_ID")->AsString;
+       /* query.querytext = oraquery->FieldByName("sqltext1")->AsString + oraquery->FieldByName("sqltext2")->AsString
+            + oraquery->FieldByName("sqltext3")->AsString + oraquery->FieldByName("sqltext4")->AsString; */
+
+        query.querytext1 = oraquery->FieldByName("query_1")->AsString;
+        query.querytext2 = oraquery->FieldByName("query_2")->AsString;
+        query.querytext3 = oraquery->FieldByName("query_3")->AsString;
         query.queryname = oraquery->FieldByName("queryname")->AsString;
-        query.dbname    = oraquery->FieldByName("dbname")->AsString;
-        query.dbname2   = oraquery->FieldByName("dbname2")->AsString;
+        query.dbname1    = oraquery->FieldByName("dbname_1")->AsString;
+        query.dbname2   = oraquery->FieldByName("dbname_2")->AsString;
+        query.dbname3   = oraquery->FieldByName("dbname_3")->AsString;
         query.sortorder = oraquery->FieldByName("sortorder")->AsString;
-        query.spr_task_sql2excel_id = oraquery->FieldByName("spr_task_sql2excel_id")->AsString;
         query.tabname    = oraquery->FieldByName("tabname")->AsString;
 
         try
@@ -398,9 +406,9 @@ int __fastcall TForm1::DataSetToQueryList(TOraQuery* oraquery, std::vector<TQuer
                 vector<TExcelField>::iterator cur;
                 for (cur = query.param_excel.Fields.begin(); cur < query.param_excel.Fields.end() - 1; cur++)
                 {
-                    query.fieldslist += cur->name + " | ";
+                    query.fieldslist += cur->descr + " | ";
                 }
-                query.fieldslist += cur->name;
+                query.fieldslist += cur->descr;
             }
         }
         else
@@ -576,9 +584,12 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 
                 queryitem->param_excel.title_label = msxml.GetAttributeValue(node, "title", queryitem->queryname);
                 queryitem->param_excel.title_height = msxml.GetAttributeValue(node, "title-height", -1); // Высота заголовка в строках
-                queryitem->param_excel.templateFilename =  filetools::ExpandFileNameCustom( msxml.GetAttributeValue(node, "template", AnsiString("")), AppPath);
+                queryitem->param_excel.templateFilename =  filetools::ExpandFileNameCustom( msxml.GetAttributeValue(node, "template", String("")), AppPath);
                 queryitem->param_excel.fUnbounded = msxml.GetAttributeValue(node, "unbounded", false);
-                queryitem->param_excel.table_range_name = msxml.GetAttributeValue(node, "table_range", AnsiString(""));
+                //queryitem->param_excel.table_range_name = msxml.GetAttributeValue(node, "table_range", String(""));
+                queryitem->param_excel.table_range_name = msxml.GetAttributeValue(node, "table_range", String(""));
+                queryitem->param_excel.link_field_left = msxml.GetAttributeValue(node, "link_field_left", String(""));    // 2017-10-03
+                queryitem->param_excel.link_field_right = msxml.GetAttributeValue(node, "link_field_right", String(""));    // 2017-10-03
 
                 std::vector<TExcelField>* ListFields = &queryitem->param_excel.Fields;
 
@@ -590,10 +601,12 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                     {
                         TExcelField field;
                         field.format = LowerCase(msxml.GetAttributeValue(subnode, "format"));
-                        field.name = msxml.GetAttributeValue(subnode, "name");
+                        field.descr = msxml.GetAttributeValue(subnode, "descr");
+                        field.fieldName = msxml.GetAttributeValue(subnode, "name");
+
                         field.width = msxml.GetAttributeValue(subnode, "width", -1);    // Ширина столбца
 
-                        attribute = LowerCase(Trim(msxml.GetAttributeValue(subnode, "wraptext")));  // перенос по словам в шапке таблицы
+                        attribute = LowerCase(Trim(msxml.GetAttributeValue(subnode, "wraptext_head")));  // перенос по словам в шапке таблицы
                         if (attribute == "false")
                         {
                             field.bwraptext_head = 0;
@@ -625,9 +638,6 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
                         ListFields->push_back(field);
 
                     }
-
-
-
 
                     subnode = msxml.GetNextNode(subnode);
                 }
@@ -755,7 +765,7 @@ void TForm1::ParseExportParamsStr(AnsiString ParseStr, TQueryItem* queryitem)
 void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
 {
     // Проверяем не заблокированы ли запросы к БД
-    if (CheckLock(StrToInt(CurrentQueryItem->dbname)))
+    if (CheckLock(StrToInt(CurrentQueryItem->dbname1)))
     {
         return;
     }
@@ -766,7 +776,7 @@ void __fastcall TForm1::Run(EXPORTMODE ExportMode, int Tag)
         return;
     }
 
-    THREADOPTIONS* threadopt = new THREADOPTIONS;
+    TThreadOptions* threadopt = new TThreadOptions;
     threadopt->queryName = CurrentQueryItem->queryname;
     switch (ExportMode)
     {
@@ -1256,7 +1266,7 @@ void __fastcall TForm1::threadListener(unsigned int threadId, TThreadSelectMessa
             MessageBoxStop(msg);
             break;
         }
-        case WM_THREAD_ERROR_OPEN_QUERY:
+        case WM_THREAD_ERROR_OPEN_QUERY1:
         {
             this->Enabled = true;
             Timer1->Enabled = false;
@@ -1267,6 +1277,16 @@ void __fastcall TForm1::threadListener(unsigned int threadId, TThreadSelectMessa
             break;
         }
         case WM_THREAD_ERROR_OPEN_QUERY2:
+        {
+            this->Enabled = true;
+            Timer1->Enabled = false;
+            Form_Wait->Release();
+            OdacLog->WriteLog("STOP_THREAD_ERR", threadId, message.getMessage());    // Запись в Лог-таблицу
+            AnsiString msg = "Возникла ошибка при открытии присоединяемого запроса.\n" + message.getMessage();
+            MessageBoxStop(msg);
+            break;
+        }
+        case WM_THREAD_ERROR_OPEN_QUERY3:
         {
             this->Enabled = true;
             Timer1->Enabled = false;
@@ -1714,8 +1734,8 @@ void __fastcall TForm1::TabControl1Change(TObject *Sender)
     FillParametersLV();
 }
 
-//---------------------------------------------------------------------------
-// Выводит список запросов в ListBox 
+/* Выводит список запросов в ListBox
+*/
 void TForm1::FillFieldsLB()
 {
     Panel3->Color = m_vTabColor[TabControl1->TabIndex % m_vTabColor.size()];
@@ -1723,12 +1743,14 @@ void TForm1::FillFieldsLB()
     TTabItem* TabItem = &TabList[TabControl1->TabIndex];
     ListBox1->Items->BeginUpdate();
     ListBox1->Clear();
-    for (QueryItemList::size_type i = 0; i < TabItem->queryitem.size(); i++)
+
+    for (TQueryItemList::iterator it = TabItem->queryitem.begin(); it != TabItem->queryitem.end(); it++)
     {
-        AnsiString sName = TabItem->queryitem[i]->queryname;   // QueryName
-        AnsiString sFields = TabItem->queryitem[i]->fieldslist; // Fields
+        String sName = (*it)->queryname;   // QueryName
+        String sFields = (*it)->fieldslist; // Fields
         ListBox1->Items->Add(sName + "\\n" + sFields);
     }
+
     ListBox1->Items->EndUpdate();
     if (ListBox1->Items->Count > 0)
     {
@@ -2118,8 +2140,9 @@ void __fastcall TForm1::ActionShowHelpExecute(TObject *Sender)
     AnsiString str = "Горячие клавиши:\n"
     "F1 \t- Настоящая справка\n"
     "Ctrl+F1 \t- Отобразить список переменных среды\n"
-    "Ctrl+S \t- Отобразить текст основного запроса\n"
-    "Ctrl+Alt+S \t- Отобразить текст вспомогательного запроса\n"
+    "Ctrl+1 \t- Отобразить текст основного запроса\n"
+    "Ctrl+2 \t- Отобразить текст присоединяемого запроса\n"
+    "Ctrl+3 \t- Отобразить текст вспомогательного запроса\n"
     "F8 \t- Выполнить запрос\n"
     "Esc \t- Выход из программы\n"
     "\n"
@@ -2134,7 +2157,7 @@ void __fastcall TForm1::ActionShowHelpExecute(TObject *Sender)
 // Скопировать текст запроса
 void __fastcall TForm1::ActionCopyQueryExecute(TObject *Sender)
 {
-    AnsiString str = GetSQL(CurrentQueryItem->querytext, &CurrentQueryItem->UserParams);
+    AnsiString str = GetSQL(CurrentQueryItem->querytext1, &CurrentQueryItem->UserParams);
     Clipboard()->AsText = str;
     //FormShowQuery->ShowQuery(str, CurrentQueryItem->queryname);
 }
@@ -2145,9 +2168,9 @@ void __fastcall TForm1::ActionCopyQueryExecute(TObject *Sender)
 // Отобразить текст основного запроса
 void __fastcall TForm1::ActionShowMainQueryExecute(TObject *Sender)
 {
-    if (CurrentQueryItem->querytext != "")
+    if (CurrentQueryItem->querytext1 != "")
     {
-        AnsiString str = GetSQL(CurrentQueryItem->querytext, &CurrentQueryItem->UserParams);
+        AnsiString str = GetSQL(CurrentQueryItem->querytext1, &CurrentQueryItem->UserParams);
         FormShowQuery->ShowQuery(str, "SQL-текст основного запроса \"" + CurrentQueryItem->queryname + "\"");
     }
     else
@@ -2158,13 +2181,30 @@ void __fastcall TForm1::ActionShowMainQueryExecute(TObject *Sender)
 }
 
 //---------------------------------------------------------------------------
-// Ctrl+Alt+S
-// Отобразить текст вспомогательного запроса
-void __fastcall TForm1::ActionShowSecondaryQueryExecute(TObject *Sender)
+// Ctrl+2
+// Отобразить текст присоединяемого запроса
+void __fastcall TForm1::ActionShowLinkingQueryExecute(TObject *Sender)
 {
     if (CurrentQueryItem->querytext2 != "")
     {
         AnsiString str = GetSQL(CurrentQueryItem->querytext2, &CurrentQueryItem->UserParams);
+        FormShowQuery->ShowQuery(str, "SQL-текст присоединямого запроса \"" + CurrentQueryItem->queryname + "\"");
+    }
+    else
+    {
+        MessageBoxInf("Текст присоединямого запроса отсутствует.\n");
+    }
+}
+
+
+//---------------------------------------------------------------------------
+// Ctrl+3
+// Отобразить текст вспомогательного запроса
+void __fastcall TForm1::ActionShowSecondaryQueryExecute(TObject *Sender)
+{
+    if (CurrentQueryItem->querytext3 != "")
+    {
+        String str = GetSQL(CurrentQueryItem->querytext3, &CurrentQueryItem->UserParams);
         FormShowQuery->ShowQuery(str, "SQL-текст вспомогательного запроса \"" + CurrentQueryItem->queryname + "\"");
     }
     else
@@ -2172,6 +2212,9 @@ void __fastcall TForm1::ActionShowSecondaryQueryExecute(TObject *Sender)
         MessageBoxInf("Текст вспомогательного запроса отсутствует.\n");
     }
 }
+
+//---------------------------------------------------------------------------
+
 
 
 //---------------------------------------------------------------------------
@@ -2250,7 +2293,7 @@ void __fastcall TForm1::BitBtn2Click(TObject *Sender)
 /* Задает параметры потока
    и запускает его
 */
-void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
+void __fastcall TForm1::DoExport(TThreadOptions* threadopt)
 {
     // Выполнение выбранного запроса
     if (ListBox1->ItemIndex < 0)
@@ -2260,19 +2303,29 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
     }
 
     // Выбор необходимого OraSession
-    TOraSession *orasession = NULL;
+    TOraSession *orasession1 = NULL;
     TOraSession *orasession2 = NULL;
+    TOraSession *orasession3 = NULL;
+
     try
     {                                       // Если в запросе в БД не указан индекс в поле DBNAME
-        int dbname = 0;
+        int dbname1 = 0;
         int dbname2 = 0;
-        dbname = StrToInt(CurrentQueryItem->dbname);
-        orasession = m_sessions[dbname];       // Основная сессия
+        int dbname3 = 0;
+
+        dbname1 = StrToInt(CurrentQueryItem->dbname1);
+        orasession1 = m_sessions[dbname1];       // Основная сессия
 
         if (CurrentQueryItem->dbname2 != "")
         {
             dbname2 = StrToInt(CurrentQueryItem->dbname2);
             orasession2  = m_sessions[dbname2];    // Дополнительная сессия
+        }
+
+        if (CurrentQueryItem->dbname3 != "")
+        {
+            dbname3 = StrToInt(CurrentQueryItem->dbname3);
+            orasession3  = m_sessions[dbname3];    // Дополнительная сессия
         }
     }
     catch(...)
@@ -2286,18 +2339,17 @@ void __fastcall TForm1::DoExport(THREADOPTIONS* threadopt)
     //OdacLog->WriteLog("Execute query", CurrentQueryItem->queryname);    // Запись в Лог-таблицу
 
     // ФОРМИРОВАНИЕ СТРОКИ ЗАПРОСА
-    AnsiString querytext;
-    AnsiString querytext2;
-    querytext = GetSQL(CurrentQueryItem->querytext, &CurrentQueryItem->UserParams);    // Основной запрос
-    querytext2 = GetSQL(CurrentQueryItem->querytext2, &CurrentQueryItem->UserParams);  // Дополнительный запрос, может не использоваться (используется в отчетах MS Word)
 
-    threadopt->querytext = querytext;
-    threadopt->querytext2 = querytext2;
+    threadopt->querytext1 = GetSQL(CurrentQueryItem->querytext1, &CurrentQueryItem->UserParams);    // Основной запрос
+    threadopt->querytext2 = GetSQL(CurrentQueryItem->querytext2, &CurrentQueryItem->UserParams);  // Дополнительный запрос, может не использоваться (используется в отчетах MS Word)
+    threadopt->querytext3 = GetSQL(CurrentQueryItem->querytext3, &CurrentQueryItem->UserParams);  // Дополнительный запрос, может не использоваться (используется в отчетах MS Word)
     threadopt->queryitem = CurrentQueryItem;
+
     threadopt->ParentFormHandle = this->Handle;
 
-    threadopt->TemplateOraSession = orasession;
+    threadopt->TemplateOraSession1 = orasession1;
     threadopt->TemplateOraSession2 = orasession2;
+    threadopt->TemplateOraSession3 = orasession3;
 
     // СОЗДАНИЕ И ЗАПУСК ПОТОКА
     ts = new TThreadSelect(true, threadopt);    // Создаем приостановленный поток
@@ -2410,4 +2462,5 @@ void __fastcall TForm1::ActionShowEnvironmentExecute(TObject *Sender)
     MessageBoxInf(str, "Список переменных среды SQL2Excel");
 }
 //---------------------------------------------------------------------------
+
 

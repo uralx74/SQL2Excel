@@ -10,20 +10,17 @@
 
 
 using namespace vartools;
+using namespace datasettools;
 
 unsigned int TThreadSelect::_threadIndex = 0;
 
 /**/
-//__fastcall ThreadSelect::ThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt, void (*f)(const String&, int))
-__fastcall TThreadSelect::TThreadSelect(bool CreateSuspended, THREADOPTIONS* threadopt)
+__fastcall TThreadSelect::TThreadSelect(bool CreateSuspended, TThreadOptions* threadopt)
     : TThread(CreateSuspended),
     _threadMessage("")
 {
     FreeOnTerminate = true;
     Suspended = true;
-    //WParamResultMessage = 0;
-    //LParamResultMessage = 0;
-    //AppPath = ExtractFilePath(Application->ExeName);
 
     SetThreadOpt(threadopt);
     _threadIndex++;
@@ -31,61 +28,77 @@ __fastcall TThreadSelect::TThreadSelect(bool CreateSuspended, THREADOPTIONS* thr
     randomize();
     _threadId = random(9999999999);
 
-    //documentWriter = new TDocumentWriter();
-
 }
 
 /**/
 __fastcall TThreadSelect::~TThreadSelect()
 {
-    if (ThreadOraSession != NULL)
+    if (_oraSession1 != NULL)
     {
-        ThreadOraSession->Disconnect();
+        _oraSession1->Disconnect();
         //ThreadOraSession->Close();
-        delete ThreadOraSession;
+        delete _oraSession1;
     }
 
-    if (ThreadOraSession2 != NULL && ThreadOraSession != ThreadOraSession2)
+    if (_oraSession2 != NULL && _oraSession1 != _oraSession2)
     {
-        ThreadOraSession2->Disconnect();
-        delete ThreadOraSession2;
+        _oraSession2->Disconnect();
+        delete _oraSession2;
     }
 
-    ThreadOraSession = NULL;
-    ThreadOraSession2 = NULL;
+    _oraSession1 = NULL;
+    _oraSession2 = NULL;
+    _oraSession3 = NULL;
 
     _resultFiles.clear();
-
-    //QueryParams.free();
 
     _threadIndex--;
 }
 
 /* Установка параметров для выполнения запроса и подготовки отчета */
-void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
+void TThreadSelect::SetThreadOpt(TThreadOptions* threadopt)
 {
     //m_th_opt = *threadopt;
     this->ParentFormHandle = threadopt->ParentFormHandle;   // Handle главной формы
     this->_reportName = threadopt->queryName;
-    this->_mainQueryText = threadopt->querytext;            // Текст запроса
-    this->_secondaryQueryText = threadopt->querytext2;      // Текст запроса
+
+    this->_queryText1 = threadopt->querytext1;            // Текст запроса
+    this->_queryText2 = threadopt->querytext2;      // Текст запроса
+    this->_queryText3 = threadopt->querytext3;      // Текст запроса
+
+
     this->DstFileName = threadopt->dstfilename;         // Имя результирующего файла
     this->ExportMode = threadopt->exportmode;           // Режим экспорта _EXPORTMODE
 
 
-    ThreadOraSession = CreateOraSession(threadopt->TemplateOraSession);
-    ThreadOraSession2 = NULL;
+    _oraSession1 = CreateOraSession(threadopt->TemplateOraSession1);
+    _oraSession2 = NULL;
+    _oraSession3 = NULL;
+
     if (threadopt->TemplateOraSession2 != NULL)
     {
-        if (threadopt->TemplateOraSession != threadopt->TemplateOraSession2)        // Если соединения к разным БД
+        if (threadopt->TemplateOraSession1 != threadopt->TemplateOraSession2)        // Если соединения к разным БД
         {
-            ThreadOraSession2 = CreateOraSession(threadopt->TemplateOraSession2);   // то создаем новое соединение
+            _oraSession2 = CreateOraSession(threadopt->TemplateOraSession2);        // то создаем новое соединение
         }
         else                                                                        // иначе копируем указатель на первое соединение
         {
-            ThreadOraSession2 = ThreadOraSession;
+            _oraSession2 = _oraSession1;
         }
     }
+
+    if (threadopt->TemplateOraSession3 != NULL)
+    {
+        if (threadopt->TemplateOraSession1 != threadopt->TemplateOraSession3)        // Если соединения к разным БД
+        {
+            _oraSession3 = CreateOraSession(threadopt->TemplateOraSession3);        // то создаем новое соединение
+        }
+        else                                                                        // иначе копируем указатель на первое соединение
+        {
+            _oraSession3 = _oraSession1;
+        }
+    }
+
 
     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -98,14 +111,10 @@ void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
     switch (threadopt->exportmode) {
     case EM_EXCEL_BLANK:
     {
-        // Наименование отчета
+        this->param_excel = threadopt->queryitem->param_excel;
+        // Если наименование заголовка не задано в параметрах, то берем его из наименования запроса
         this->param_excel.title_label = threadopt->queryitem->param_excel.title_label != ""? threadopt->queryitem->param_excel.title_label : threadopt->queryitem->queryname;  // Наименование отчета
-        this->param_excel.title_height = threadopt->queryitem->param_excel.title_height;      // Высота заголовка таблицы MS Excel
-        this->param_excel.Fields = threadopt->queryitem->param_excel.Fields;  // Вектор полей для экспорта в MS Excel
-
-        //int k = threadopt->queryitem->param_excel.Fields.size();
-
-        this->UserParams = threadopt->queryitem->UserParams;
+        this->UserParams = threadopt->queryitem->UserParams;    // Параметры, выбраные пользователем
         break;
     }
     case EM_EXCEL_TEMPLATE:
@@ -119,9 +128,7 @@ void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
     case EM_DBASE4_FILE:
     {
         this->param_dbase = threadopt->queryitem->param_dbase;
-        //this->param_dbase.Fields = threadopt->queryitem->param_dbase.Fields;  // Вектор полей для экспорта в DBF
-        //this->param_dbase.fDisableUnassignedFields = threadopt->queryitem->param_dbase.fDisableUnassignedFields;
-        this->param_dbase.resultFilename = threadopt->dstfilename; // 2017-09-08
+        this->param_dbase.resultFilename = threadopt->dstfilename; // Имя файла-результата
         break;
     }
     case EM_PROCEDURE:
@@ -131,11 +138,6 @@ void TThreadSelect::SetThreadOpt(THREADOPTIONS* threadopt)
     case EM_WORD_TEMPLATE:
     {
         this->param_word = threadopt->queryitem->param_word;
-        /*this->param_word.pagePerDocument = threadopt->queryitem->param_word.pagePerDocument;              // Количество страниц на документ MS Word
-        this->param_word.template_name = threadopt->queryitem->param_word.template_name;        // Тестирование печать в шаблон
-        this->param_word.filter_main_field= threadopt->queryitem->param_word.filter_main_field;
-        this->param_word.filter_sec_field = threadopt->queryitem->param_word.filter_sec_field;            */
-        //this->param_word.filter_infix_sec_field = threadopt->queryitem->param_word.filter_infix_sec_field;
         break;
     }
     }
@@ -196,7 +198,7 @@ TOraSession* __fastcall TThreadSelect::CreateOraSession(TOraSession* TemplateOra
 //---------------------------------------------------------------------------
 void __fastcall TThreadSelect::Execute()
 {
-    if (!ThreadOraSession->Connected)
+    if ( !_oraSession1->Connected )
     {
         setStatus(WM_THREAD_ERROR_BD_CANT_CONNECT, "Произошла ошибка. База данных недоступна.");
         this->Terminate();
@@ -212,11 +214,11 @@ void __fastcall TThreadSelect::Execute()
             // Выполнить как процедуру
             try
             {
-                OraQueryMain = new TOraQuery(NULL);
-                OraQueryMain->FetchAll = true;
-                OraQueryMain->Session = ThreadOraSession;
-                OraQueryMain->SQL->Add(_mainQueryText);
-                OraQueryMain->Execute();
+                _oraQuery1 = new TOraQuery(NULL);
+                _oraQuery1->FetchAll = true;
+                _oraQuery1->Session = _oraSession1;
+                _oraQuery1->SQL->Add(_queryText1);
+                _oraQuery1->Execute();
 
                 setStatus(WM_THREAD_EXECUTE_DONE);
             }
@@ -227,13 +229,13 @@ void __fastcall TThreadSelect::Execute()
 
             try
             {
-                delete OraQueryMain;
+                delete _oraQuery1;
             }
             catch (...)
             {
             }
 
-            OraQueryMain = NULL;
+            _oraQuery1 = NULL;
 
             Synchronize(SyncThreadChangeStatus);
             return;
@@ -245,16 +247,17 @@ void __fastcall TThreadSelect::Execute()
             Тогда необходимо выводить соответствующий текст об ошибке.
             Сейчас выводится "... Проверте правильность запроса."*/
 
-    if (!this->Terminated && _mainQueryText != "")    // Если задан первый запрос
+    // Выполняем первый запрос
+    if (!this->Terminated && _queryText1 != "")    // Если задан первый запрос
     {
         // Пробуем выполниь основной запрос
         try
         {
-            OraQueryMain = OpenOraQuery(ThreadOraSession, _mainQueryText, false);
+            _oraQuery1 = OpenOraQuery(_oraSession1, _queryText1, false);
         }
         catch (Exception &e)
         {
-            setStatus(WM_THREAD_ERROR_OPEN_QUERY, "Ошибка при попытке выполнить запрос.\n" + e.Message);
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY1, "Ошибка при попытке выполнить запрос 1.\n" + e.Message);
             this->Terminate();
         }
 
@@ -265,15 +268,36 @@ void __fastcall TThreadSelect::Execute()
         }*/
     }
 
-    if (!this->Terminated && _secondaryQueryText != "")     // Если задан второй запрос
+    // Выполняем второй запрос
+    if (!this->Terminated && _queryText2 != "")     // Если задан второй запрос
     {    // Пробуем выполнить вспомогательный запрос
         try
         {
-            OraQuerySecondary = OpenOraQuery(ThreadOraSession2, _secondaryQueryText, false);
+            _oraQuery2 = OpenOraQuery(_oraSession2, _queryText2, false);
         }
         catch (Exception &e)
         {
-            setStatus(WM_THREAD_ERROR_OPEN_QUERY2, "Ошибка при попытке выполнить запрос.\n" + e.Message);
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY2, "Ошибка при попытке выполнить запрос 2.\n" + e.Message);
+            this->Terminate();
+        }
+
+        /*if (OraQuerySecondary == NULL)
+        {
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY2);
+            this->Terminate();
+        } */
+    }
+
+    // Выполняем третий запрос
+    if (!this->Terminated && _queryText3 != "")     // Если задан второй запрос
+    {    // Пробуем выполнить вспомогательный запрос
+        try
+        {
+            _oraQuery3 = OpenOraQuery(_oraSession3, _queryText3, false);
+        }
+        catch (Exception &e)
+        {
+            setStatus(WM_THREAD_ERROR_OPEN_QUERY3, "Ошибка при попытке выполнить запрос 3.\n" + e.Message);
             this->Terminate();
         }
 
@@ -295,9 +319,9 @@ void __fastcall TThreadSelect::Execute()
     {
         int RecCount = 0;
 
-        OraQueryMain->FetchAll = true;
+        _oraQuery1->FetchAll = true;
 
-	    RecCount = OraQueryMain->RecordCount;
+	    RecCount = _oraQuery1->RecordCount;
 
         if (RecCount <= 0) // Если запрос не вернул записей
         {
@@ -327,10 +351,12 @@ void __fastcall TThreadSelect::Execute()
             setStatus(WM_THREAD_PROCEED_BEGIN_DOCUMENT);
             Synchronize(SyncThreadChangeStatus);
 
-            switch (ExportMode) {
+            switch (ExportMode)
+            {
             case EM_EXCEL_TEMPLATE:
                 CoInitialize(NULL);
-                DoExportToExcel();
+                //DoExportToExcelTemplate();
+                DoExportToExcel(true);
                 //ExportToExcelTemplate(OraQueryMain, OraQuerySecondary);
                 CoUninitialize();
                 break;
@@ -370,13 +396,13 @@ void __fastcall TThreadSelect::Execute()
     // Закрытие основного запроса
     if ( !this->Terminated )
     {
-        if ( OraQueryMain != NULL )
+        if ( _oraQuery1 != NULL )
         {
             try
             {
-                OraQueryMain->Close();
-                delete OraQueryMain;
-                OraQueryMain = NULL;
+                _oraQuery1->Close();
+                delete _oraQuery1;
+                _oraQuery1 = NULL;
             }
             catch (...)
             {
@@ -384,13 +410,13 @@ void __fastcall TThreadSelect::Execute()
         }
 
         // Закрытие вспомогательного запроса
-        if ( OraQuerySecondary != NULL )
+        if ( _oraQuery2 != NULL )
         {
             try
             {
-                OraQuerySecondary->Close();
-                delete OraQuerySecondary;
-                OraQuerySecondary = NULL;
+                _oraQuery2->Close();
+                delete _oraQuery2;
+                _oraQuery2 = NULL;
             }
             catch (...)
             {
@@ -402,10 +428,48 @@ void __fastcall TThreadSelect::Execute()
     Synchronize(SyncThreadChangeStatus);
 }
 
+
+
+
+ /*procedure TDataModule1.CopyField(Field: TField);
+  var 
+    NewField: TField; 
+  begin 
+    case Field.DataType of 
+      ftString: NewField := TStringField.Create(Self); 
+      ftDateTime: NewField := TDataTimeField.Create(Self); 
+      // for each DataType there are an option on this case... 
+    end; 
+    NewField.FieldName := Field.FieldName;
+    NewField.Lookup := Field.Lookup;
+    // there are too much code here to copy all properties I need...
+  end;
+  */
+
+
+
 /* Процедура экспорта в чистый файл Excel
 */
-void __fastcall TThreadSelect::DoExportToExcel()
+void __fastcall TThreadSelect::DoExportToExcel(bool toTemplate)
 {
+
+    TDataSet* mainDs;
+    TDataSet* slaveDs = _oraQuery3;
+
+    // Если необходимо соединить два запроса
+    if (param_excel.link_field_left != "" && param_excel.link_field_right != "")
+    {
+        TDataSet* ds = JoinDataset(_oraQuery1, _oraQuery2, param_excel.link_field_left, param_excel.link_field_right);
+        // ////////////////////////////////////// нужно в этой функции убирать ключевое поле из right и разобраться с именами столбцов
+        // ////////////////////////////////////// предположительно лучше если будет требование чтобы имена записей отличались
+
+        mainDs = ds;
+        // //////////////////////////////////////  Удалять ds после использования
+    }
+    else
+    {
+        mainDs = _oraQuery1;
+    }
 
     // Заполняем массив, со значеними параметров, заданными пользователем
     // Возможно в будущем сделать распознавание параметра с типом "separator",
@@ -424,8 +488,6 @@ void __fastcall TThreadSelect::DoExportToExcel()
     if (param_count > 0)     // Список параметров для вывода в Excel
     {
         data_parameters = CreateVariantArray(visible_param_count, 1);
-        //data_parameters = CreateVariantArray(2, 1);
-
 
         for (int i=0; i <= param_count-1; i++)
         {
@@ -436,11 +498,11 @@ void __fastcall TThreadSelect::DoExportToExcel()
 
             if (UserParams[i]->type != "separator")
             {
-                data_parameters.PutElement(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay(), i+1, 1);
+                data_parameters.PutElement(Variant(UserParams[i]->getCaption() + ": " + UserParams[i]->getDisplay()), i+1, 1);
             }
             else
             {
-                data_parameters.PutElement("[" + UserParams[i]->getCaption() + "]", i+1, 1);
+                data_parameters.PutElement(Variant("[" + UserParams[i]->getCaption() + "]"), i+1, 1);
             }
         }
     }
@@ -451,33 +513,46 @@ void __fastcall TThreadSelect::DoExportToExcel()
         // Массив для sql-текста
         Variant range_sqltext;
         int PartMaxLength = 4000;  // 8 192  - максимальная длина строки в ячейке EXCEL
-        int n = ceil( (float) _mainQueryText.Length() / PartMaxLength);
+        int n = ceil( (float) _queryText1.Length() / PartMaxLength);
 
         sql_text = CreateVariantArray(n, 1);
 
         for (int i = 1; i <= n; i++)
         {
-            String sQueryPart = _mainQueryText.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
-            sql_text.PutElement(sQueryPart, i, 1);
+            String sQueryPart = _queryText1.SubString(((i-1) * PartMaxLength) + 1, PartMaxLength);
+            sql_text.PutElement(Variant(sQueryPart), i, 1);
         }
     }
 
-    // Добавляем источники данных
-    param_excel.addTableDataSet(OraQueryMain, "table_body", "table_column_");
-    param_excel.addTableVtArray(data_parameters, "report_parameters");
-    param_excel.addTableVtArray(sql_text, "report_query_text");
+    // Добавляем источники данных и делаем экспорт
+    // Проверить!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! 2017-09-26
+    if ( toTemplate != true )
+    {                           // В пустой документ
+        param_excel.addTableDataSet(mainDs, "table_body", "table_column_");
+        if ( param_count > 0 )
+        {
+            param_excel.addTableVtArray(data_parameters, "report_parameters");
+        }
+        param_excel.addTableVtArray(sql_text, "report_query_text");
 
-    documentWriter.ExportToExcel(&param_excel);
+        documentWriter.ExportToExcel(&param_excel);
+    }
+    else                        // В готовый шаблон
+    {
+        param_excel.addSingleDataSet(slaveDs, "");
+        param_excel.addTableDataSet(mainDs, param_excel.table_range_name, "");
+        documentWriter.ExportToExcelTemplate(&param_excel);
+    }
+
     _resultFiles = documentWriter._result.resultFiles;
 
 }
-
 
 /* Процедура экспорта в шаблон Word
    Примечание: Следует перенести в отдельный модуль */
 void __fastcall TThreadSelect::DoExportToWordTemplate()
 {
-    if ( OraQueryMain->RecordCount == 0)
+    if ( _oraQuery1->RecordCount == 0)
     {
         return;
     }
@@ -488,47 +563,77 @@ void __fastcall TThreadSelect::DoExportToWordTemplate()
     //wordExportParams.pagePerDocument = param_word.pagePerDocument;
 
     /* Присоединяем источники данных */
-    wordExportParams->addFormtextDataSet(OraQuerySecondary);     // Общая информация по участку
+    if (_oraQuery1 != NULL)
+    {
+        wordExportParams->addSingleTextDataSet(_oraQuery1);
+        //wordExportParams->addTableDataSet(_oraQuery1);        // Если задана таблица 2017-11-07 доделать - добавить в параметры индекс заполняемой таблицы
+        wordExportParams->addFormtextDataSet(_oraQuery1);     // Общая информация по участку
+        wordExportParams->addMergeDataSet(_oraQuery1);
+        wordExportParams->addSingleImageDataSet(_oraQuery1, "img_");     // Общая информация по участку
+    }
+
+    if (_oraQuery2 != NULL)
+    {
+        wordExportParams->addSingleTextDataSet(_oraQuery2);
+        //wordExportParams->addTableDataSet(_oraQuery2);        // Если задана таблица 2017-11-07 доделать - добавить в параметры индекс заполняемой таблицы
+        wordExportParams->addFormtextDataSet(_oraQuery2);     // Общая информация по участку
+        wordExportParams->addMergeDataSet(_oraQuery2);
+        wordExportParams->addSingleImageDataSet(_oraQuery2, "img_");     // Общая информация по участку
+    }
+    if (_oraQuery3 != NULL)
+    {
+        wordExportParams->addSingleTextDataSet(_oraQuery3);
+        //wordExportParams->addTableDataSet(_oraQuery3);        // Если задана таблица 2017-11-07 доделать - добавить в параметры индекс заполняемой таблицы
+        wordExportParams->addFormtextDataSet(_oraQuery3);     // Общая информация по участку
+        wordExportParams->addMergeDataSet(_oraQuery3);
+        wordExportParams->addSingleImageDataSet(_oraQuery3, "img_");     // Общая информация по участку
+    }
+
     //wordExportParams.addSingleTextDataSet(OraQuerySecondary, "rec_");  // Информация по реестру
-    wordExportParams->addMergeDataSet(OraQueryMain);
     //wordExportParams->templateFilename =  param_word.templateFilename;
+
+
+    
 
 
     bool bFilterExist = param_word.filter_main_field != "" && param_word.filter_sec_field != "";    // Если в параметрах задан фильтр, то считаем, что установлен фильтр
 
     if ( bFilterExist ) // Если задан фильтр
     {
+         /* 2017-11-07 переделать слияние dataset
         int i = 1;
-        while( !OraQuerySecondary->Eof )
+        while( !_oraQuery3->Eof )
         {
             // Если задан фильтр, применяем его к основному запросу
             try
             {
-                String sFilter = param_word.filter_main_field + "='" + OraQuerySecondary->FieldByName(param_word.filter_sec_field)->AsString + "'";
-                OraQueryMain->Filtered = false;
-                OraQueryMain->Filter = sFilter;
-                OraQueryMain->Filtered = true;
+                String sFilter = param_word.filter_main_field + "='" + _oraQuery3->FieldByName(param_word.filter_sec_field)->AsString + "'";
+                _oraQuery1->Filtered = false;
+                _oraQuery1->Filter = sFilter;
+                _oraQuery1->Filtered = true;
             }
             catch ( Exception &e )
             {
-                OraQueryMain->Filtered = false;
+                _oraQuery1->Filtered = false;
                 _threadStatus = WM_THREAD_ERROR_IN_PROCESS;
                 _threadMessage = "Проверьте корректность параметров фильтра в параметрах экспорта или обратитесь к системному администратору.\n" + e.Message;
                 break;
             }
 
-            if ( OraQueryMain->RecordCount > 0 )         // Если есть записи, то формируем документ
+            if ( _oraQuery1->RecordCount > 0 )         // Если есть записи, то формируем документ
             {
                 wordExportParams->resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_" + IntToStr(i++)+ "_[:counter].doc";
                 documentWriter.ExportToWordTemplate(wordExportParams);
                 _resultFiles = documentWriter._result.resultFiles;
             }
-            OraQuerySecondary->Next();
+            _oraQuery3->Next();
         }
+        */
     }
     else
     {   // если фильтр не задан, делаем экпорт как есть
-        wordExportParams->resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_[:counter].doc";
+        //wordExportParams->resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName) + "_[:counter].doc";
+        wordExportParams->resultFilename = ExtractFilePath(DstFileName) + ExtractFileName(DstFileName);// + ".docx";
         documentWriter.ExportToWordTemplate(wordExportParams);
         _resultFiles = documentWriter._result.resultFiles;
     }
@@ -538,11 +643,11 @@ void __fastcall TThreadSelect::DoExportToWordTemplate()
    Примечание: Следует перенести в отдельный модуль */
 void __fastcall TThreadSelect::DoExportToDbf()
 {
-    if ( OraQueryMain->RecordCount == 0)
+    if ( _oraQuery1->RecordCount == 0)
     {
         return;
     }
-    param_dbase.srcDataSet = OraQueryMain;  // Возможно перенести в SetThreadOpt 2017-09-08
+    param_dbase.srcDataSet = _oraQuery1;  // Возможно перенести в SetThreadOpt 2017-09-08
 
     documentWriter.ExportToDbf(&param_dbase);
     _resultFiles = documentWriter._result.resultFiles;
